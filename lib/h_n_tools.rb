@@ -3,7 +3,7 @@ require 'fileutils'
 
 class HNTools
   CONFIG = {} 
-  CONFIG[:data_dir] = "data/"
+  CONFIG[:raw_dir] = "raw/"
   CONFIG[:yaml_dir] = "yaml/"
   CONFIG[:pajek_dir] = "pajek/"
   CONFIG[:root_dir] = "" # set before use
@@ -16,7 +16,7 @@ class HNTools
   end
 
   def self.init_dirs
-    FileUtils.mkdir_p(HNTools::CONFIG[:root_dir] + HNTools::CONFIG[:data_dir])
+    FileUtils.mkdir_p(HNTools::CONFIG[:root_dir] + HNTools::CONFIG[:raw_dir])
     FileUtils.mkdir_p(HNTools::CONFIG[:root_dir] + HNTools::CONFIG[:yaml_dir])
     FileUtils.mkdir_p(HNTools::CONFIG[:root_dir] + HNTools::CONFIG[:pajek_dir])
   end

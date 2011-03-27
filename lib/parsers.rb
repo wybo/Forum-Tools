@@ -9,7 +9,7 @@ class HNParser < Array
   attr_reader :file_name, :save_time
 
   def self.all(class_const, file_regexp)
-    file_names = Dir.glob(HNTools::CONFIG[:root_dir] + HNTools::CONFIG[:data_dir] + file_regexp)
+    file_names = Dir.glob(HNTools::CONFIG[:root_dir] + HNTools::CONFIG[:raw_dir] + file_regexp)
     list = []
     file_names.each do |file_name|
       print "."
@@ -71,7 +71,7 @@ class HNParser < Array
   end
 
   def read_data
-    doc = Nokogiri::HTML(open(HNTools::CONFIG[:root_dir] + HNTools::CONFIG[:data_dir] + @file_name))
+    doc = Nokogiri::HTML(open(HNTools::CONFIG[:root_dir] + HNTools::CONFIG[:raw_dir] + @file_name))
   end
 
   def parse_file_time(file_name)

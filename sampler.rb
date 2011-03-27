@@ -6,8 +6,8 @@ require 'fileutils'
 require 'h_n_tools'
 
 HNTools.config(:start_time => Time.utc(2011,"jan",31))
-HNTools.config(:from_dir => "/home/wybo/projects/hnscraper/production/")
-HNTools.config(:root_dir => "/home/wybo/projects/hnscraper/test/")
+HNTools.config(:from_dir => "/home/wybo/projects/hnscraper/production/data/")
+HNTools.config(:root_dir => "/home/wybo/projects/hnscraper/data/")
 
 def sample(options = {})
   start_time = HNTools::CONFIG[:start_time]
@@ -19,7 +19,7 @@ def sample(options = {})
   end
   puts "# Selecting files"
   list = []
-  file_names = Dir.glob(HNTools::CONFIG[:from_dir] + HNTools::CONFIG[:data_dir] + "*")
+  file_names = Dir.glob(HNTools::CONFIG[:from_dir] + "*")
   puts "globbed #{file_names.size.to_s} files"
   file_names.each do |file_name|
     if options[:time_span]
@@ -41,8 +41,8 @@ def populate(list)
   list.each do |file_name|
     print "."
     FileUtils.copy(
-        HNTools::CONFIG[:from_dir] + HNTools::CONFIG[:data_dir] + file_name,
-        HNTools::CONFIG[:root_dir] + HNTools::CONFIG[:data_dir] + file_name) 
+        HNTools::CONFIG[:from_dir] + file_name,
+        HNTools::CONFIG[:root_dir] + HNTools::CONFIG[:raw_dir] + file_name) 
   end
   print "\n"
 end

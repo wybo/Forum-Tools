@@ -3,7 +3,7 @@ $: << File.expand_path(File.dirname(__FILE__) + "/lib")
 require 'parsers'
 require 'stores'
 
-HNTools.config(:root_dir => "/home/wybo/projects/hnscraper/test/")
+HNTools.config(:root_dir => "/home/wybo/projects/hnscraper/data/")
 
 puts '### Parsing Hacker News data'
 

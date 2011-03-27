@@ -4,7 +4,7 @@ require 'parsers'
 require 'stores'
 require 'h_o_t_tools'
 
-HNTools.config(:root_dir => "/home/wybo/projects/hnscraper/test/")
+HNTools.config(:root_dir => "/home/wybo/projects/hnscraper/data/")
 
 puts '### Extracting directed network'
 
