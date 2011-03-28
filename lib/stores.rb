@@ -177,3 +177,22 @@ class TimesStore < Store
     end
   end
 end
+
+class UserStore < Store
+  def self.all
+    return Store.all(ThreadStore, "user*")
+  end
+
+  def initialize(options = {})
+    if options.kind_of?(String)
+      if options =~ /\.yaml$/
+        super(options)
+      else
+        super("user_" + options + ".yaml")
+      end
+    else
+      raise 'Invalid options: ' + options.inspect
+    end
+  end
+end
+

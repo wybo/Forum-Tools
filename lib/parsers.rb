@@ -1,5 +1,7 @@
-require 'rubygems'; require 'active_support/all'
-require 'nokogiri'; require 'chronic'
+require 'rubygems'
+require 'active_support/all'
+require 'nokogiri'
+require 'chronic'
 require 'yaml'
 require 'h_n_tools'
 
@@ -30,9 +32,9 @@ class HNParser < Array
   end
 
   def set_correction
-    if @file_name =~ /grun/
+    if @file_name =~ /_grun_/
       @correction = (3.minutes + 4.seconds).to_i * -1
-    elsif @file_name =~ /eeep/
+    elsif @file_name =~ /_eeep_/
       @correction = (3.minutes).to_i * -1
     else
       @correction = 0
@@ -179,5 +181,52 @@ class HNIndexParser < HNParser
       end
     end
     return self
+  end
+end
+
+class HNUserParser < HNParser
+  attr_reader :user, :time, :karma, :avg_karma
+
+  def self.all
+    return HNParser.all(HNUserParser, "user*")
+  end
+
+  def initialize(file_name)
+    super(file_name)
+    hash = {}
+    doc = read_data()
+    i = 0
+    doc.css('table form table tr').each do |aspect|
+      if i < 4
+        key = nil
+        aspect.css('td').each do |key_val|
+          if key.nil?
+            key = key_val.content.gsub(/:$/,'')
+          else
+            hash[key.to_sym] = key_val.content
+          end
+        end
+      end
+      i += 1
+    end
+    @signup_time = Chronic.parse(hash[:created], :now => @save_time).to_i + @correction
+    @user = hash[:user]
+    @karma = hash[:karma].to_i
+    @average_rating = hash[:avg].to_f
+    return self
+  end
+
+  def save
+    file_name = @file_name.gsub("user_grun_", "user_")
+    file_name.gsub!(/_\d+.html/, ".yaml")
+    HNTools::File.save_yaml(file_name, self)
+  end
+
+  def to_yaml
+    return {:save_time => @save_time, 
+        :signup_time => @signup_time,
+        :user => @user,
+        :karma => @karma,
+        :average_rating => @average_rating}.to_yaml
   end
 end

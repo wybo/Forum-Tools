@@ -96,13 +96,21 @@ def prune
   print "\n"
 end
 
-parse_threads()
-parse_all_times()
-calculate_canonical_times()
-update_thread_post_times()
-set_on_frontpage_times()
-prune()
+def parse_users
+  puts '# Parsing users from html'
+  HNUserParser.all.each do |user|
+    user.save
+  end
+end
 
-# TODO
-# add type: normal, poll, ask
-# add deleted: false, true
+def parse_all
+  parse_threads()
+  parse_all_times()
+  calculate_canonical_times()
+  update_thread_post_times()
+  set_on_frontpage_times()
+  prune()
+end
+
+parse_all()
+#parse_users()

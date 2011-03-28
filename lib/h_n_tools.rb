@@ -6,6 +6,7 @@ class HNTools
   CONFIG[:raw_dir] = "raw/"
   CONFIG[:yaml_dir] = "yaml/"
   CONFIG[:pajek_dir] = "pajek/"
+  CONFIG[:stat_dir] = "stat/"
   CONFIG[:root_dir] = "" # set before use
 
   def self.config(options = {})
@@ -19,6 +20,7 @@ class HNTools
     FileUtils.mkdir_p(HNTools::CONFIG[:root_dir] + HNTools::CONFIG[:raw_dir])
     FileUtils.mkdir_p(HNTools::CONFIG[:root_dir] + HNTools::CONFIG[:yaml_dir])
     FileUtils.mkdir_p(HNTools::CONFIG[:root_dir] + HNTools::CONFIG[:pajek_dir])
+    FileUtils.mkdir_p(HNTools::CONFIG[:root_dir] + HNTools::CONFIG[:stat_dir])
   end
 
   class File
@@ -43,6 +45,27 @@ class HNTools
 
     def self.save_pajek(file_name, string)
       open(CONFIG[:root_dir] + CONFIG[:pajek_dir] + file_name, "w") { |file| file.write(string) }
+    end
+
+    def self.save_stat(file_name, array)
+      if array[0].kind_of?(Array)
+        rows = []
+        columns = array
+        columns.each do |column|
+          i = 0
+          column.each do |cell|
+            if !rows[i]
+              rows[i] = []
+            end
+            rows[i] << cell.to_s
+            i += 1
+          end
+        end
+        lines = rows.collect {|row| row.join("\t")}
+      else
+        lines = array
+      end
+      open(CONFIG[:root_dir] + CONFIG[:stat_dir] + file_name, "w") { |file| file.write(lines.join("\n")) }
     end
   end
 end
