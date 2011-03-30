@@ -1,9 +1,9 @@
 #!/usr/bin/ruby
-$: << File.expand_path(File.dirname(__FILE__) + "/lib")
+require 'config'
 require 'stores'
-require 'h_o_t_tools'
+require 'time_tools'
 
-HNTools.config(:root_dir => "/home/wybo/projects/hnscraper/data/")
+initialize_environment(ARGV)
 
 puts '### Gathering descriptives'
 
@@ -16,7 +16,7 @@ def simple
   threads.each do |thread|
     posts_for_each_thread << thread.size
   end
-  HNTools::File.save_stat("posts_for_each_thread.dat", ["posts"].concat(posts_for_each_thread))
+  ForumTools::File.save_stat("posts_for_each_thread", ["posts"].concat(posts_for_each_thread))
 
   puts 'Width for each thread'
   width_for_each_thread = []
@@ -24,17 +24,17 @@ def simple
     post_with_max_indent = thread.max {|a, b| a[:indent] <=> b[:indent]}
     width_for_each_thread << post_with_max_indent[:indent]
   end
-  HNTools::File.save_stat("width_for_each_thread.dat", ["width"].concat(width_for_each_thread))
+  ForumTools::File.save_stat("width_for_each_thread", ["width"].concat(width_for_each_thread))
 
   puts 'Posts for each user'
   posts_for_each_user_hash = get_posts_for_each_user(threads)
   posts_for_each_user = posts_for_each_user_hash.values.sort.reverse
-  HNTools::File.save_stat("posts_for_each_user.dat", ["posts"].concat(posts_for_each_user))
+  ForumTools::File.save_stat("posts_for_each_user", ["posts"].concat(posts_for_each_user))
 
   puts '# Totals'
 
   puts 'Threads'
-  HNTools::File.save_stat("total_threads.dat", ["threads", threads.size])
+  ForumTools::File.save_stat("total_threads", ["threads", threads.size])
 
   puts 'Posts'
   all_posts = []
@@ -43,10 +43,10 @@ def simple
       all_posts << post
     end
   end
-  HNTools::File.save_stat("total_posts.dat", ["posts", all_posts.size])
+  ForumTools::File.save_stat("total_posts", ["posts", all_posts.size])
 
   puts 'Users'
-  HNTools::File.save_stat("total_users.dat", ["users", posts_for_each_user_hash.keys.size])
+  ForumTools::File.save_stat("total_users", ["users", posts_for_each_user_hash.keys.size])
 end
 
 def over_time
@@ -56,11 +56,11 @@ def over_time
   puts 'Threads for each hour'
   times = threads.collect {|thread| thread[0][:time]}
   threads_for_each_hour = per_period_adder(times, "hour")
-  HNTools::File.save_stat("threads_for_each_hour.dat", ["threads"].concat(threads_for_each_hour))
+  ForumTools::File.save_stat("threads_for_each_hour", ["threads"].concat(threads_for_each_hour))
 
   puts 'Daily'
   threads_for_each_day = per_period_adder(times, "day")
-  HNTools::File.save_stat("threads_for_each_day.dat", ["threads"].concat(threads_for_each_day))
+  ForumTools::File.save_stat("threads_for_each_day", ["threads"].concat(threads_for_each_day))
 
   puts '# Posts over time'
   puts 'Hourly'
@@ -72,21 +72,22 @@ def over_time
   end
   times = all_posts.collect {|post| post[:time]}
   posts_for_each_hour = per_period_adder(times, "hour")
-  HNTools::File.save_stat("posts_for_each_hour.dat", ["posts"].concat(posts_for_each_hour))
+  ForumTools::File.save_stat("posts_for_each_hour", ["posts"].concat(posts_for_each_hour))
 
   puts 'Daily'
   posts_for_each_day = per_period_adder(times, "day")
-  HNTools::File.save_stat("posts_for_each_day.dat", ["posts"].concat(posts_for_each_day))
+  ForumTools::File.save_stat("posts_for_each_day", ["posts"].concat(posts_for_each_day))
 end
 
 def per_user_over_time
   puts '# Per user daily peak'
   threads = ThreadStore.all()
+  cutoff = (ForumTools::CONFIG[:environment] == "test" ? 5 : 24)
   posts_for_each_user_hash = get_posts_for_each_user(threads)
   times_for_each_prolific_user_hash = {}
   threads.each do |thread|
     thread.each do |post|
-      if posts_for_each_user_hash[post[:user]] > 24
+      if posts_for_each_user_hash[post[:user]] > cutoff
         if !times_for_each_prolific_user_hash[post[:user]]
           times_for_each_prolific_user_hash[post[:user]] = []
         end
@@ -100,7 +101,7 @@ def per_user_over_time
   times_for_each_prolific_user_hash.each_pair do |user, times|
     posts_per_hour_for_each_prolific_user[user] = per_period_adder(times, "hour")
   end
-  HNTools::File.save_stat("posts_per_hour_for_each_prolific_user.dat",
+  ForumTools::File.save_stat("posts_per_hour_for_each_prolific_user",
       columnize_users_hash(posts_per_hour_for_each_prolific_user))
 
   puts 'Aligned posts per hour for each prolific user'
@@ -110,7 +111,7 @@ def per_user_over_time
     new_hour_counts = hour_counts[(max_index - 24)..-1].concat(hour_counts[0...max_index])
     aligned_posts_per_hour_for_each_prolific_user[user] = new_hour_counts
   end
-  HNTools::File.save_stat("aligned_posts_per_hour_for_each_prolific_user.dat",
+  ForumTools::File.save_stat("aligned_posts_per_hour_for_each_prolific_user",
       columnize_users_hash(aligned_posts_per_hour_for_each_prolific_user))
 end
 
@@ -124,7 +125,7 @@ def per_period_adder(times, hour_day)
     end
   end
   times.each do |time|
-    period = HOTTools.send(hour_day, time)
+    period = TimeTools.send(hour_day, time)
     if !x_for_each_y[period]
       x_for_each_y[period] = 0
     end
@@ -149,6 +150,7 @@ end
 def columnize_users_hash(user_hash)
   columns = []
   user_hash.keys.sort.each do |user|
+    puts [user].concat(user_hash[user]).size
     columns << [user].concat(user_hash[user])
   end
   return columns

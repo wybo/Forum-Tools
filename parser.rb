@@ -1,9 +1,9 @@
 #!/usr/bin/ruby
-$: << File.expand_path(File.dirname(__FILE__) + "/lib")
+require 'config'
 require 'parsers'
 require 'stores'
 
-HNTools.config(:root_dir => "/home/wybo/projects/hnscraper/data/")
+initialize_environment(ARGV)
 
 puts '### Parsing Hacker News data'
 

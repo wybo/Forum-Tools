@@ -1,10 +1,10 @@
 #!/usr/bin/ruby
-$: << File.expand_path(File.dirname(__FILE__) + "/lib")
+require 'config'
 require 'parsers'
 require 'stores'
-require 'h_o_t_tools'
+require 'time_tools'
 
-HNTools.config(:root_dir => "/home/wybo/projects/hnscraper/data/")
+initialize_environment(ARGV)
 
 puts '### Extracting directed network'
 
@@ -18,8 +18,8 @@ def reply_list(options = {})
       indent_pointer = post[:indent]
       indent_stack[indent_pointer] = post
       if indent_pointer > 0 and (!options[:window] or
-          (HOTTools.in_time_window(options[:window], post[:time]) and
-           HOTTools.in_time_window(options[:window], indent_stack[indent_pointer - 1][:time])))
+          (TimeTools.in_time_window(options[:window], post[:time]) and
+           TimeTools.in_time_window(options[:window], indent_stack[indent_pointer - 1][:time])))
         reply_array << [post[:user], indent_stack[indent_pointer - 1][:user]]
       end
     end
@@ -34,7 +34,7 @@ def shared_thread_list(options = {})
     users_list = []
     thread.each do |post|
       if !options[:window] or 
-          HOTTools.in_time_window(options[:window], post[:time])
+          TimeTools.in_time_window(options[:window], post[:time])
         users_list << post[:user]
       end
     end
@@ -90,26 +90,26 @@ def to_pajek(network_hash, file_name, options = {})
     i += 1
   end
 
-  data = ["*Vertices #{keys.size.to_s}"]
+  lines = ["*Vertices #{keys.size.to_s}"]
   keys.each do |key|
-    data << "#{keys_hash[key].to_s} \"#{key}\""
+    lines << "#{keys_hash[key].to_s} \"#{key}\""
   end
-  data << "*#{edges}"
+  lines << "*#{edges}"
   network_hash.keys.sort.each do |key1|
     network_hash[key1].each_pair do |key2, weight|
-      data << "#{keys_hash[key1].to_s} #{keys_hash[key2].to_s} #{weight.to_s}"
+      lines << "#{keys_hash[key1].to_s} #{keys_hash[key2].to_s} #{weight.to_s}"
     end
   end
-  HNTools::File.save_pajek(file_name, data.join("\n"))
+  ForumTools::File.save_pajek(file_name, lines.join("\n") + "\n")
 end
 
 def do_replies(options = {})
   replies = reply_list(options)
   replies_network = network_hash(replies)
   if options[:window]
-    to_pajek(replies_network, "w#{options[:window].to_s}_replies.net")
+    to_pajek(replies_network, "w#{options[:window].to_s}_replies")
   else
-    to_pajek(replies_network, "all_replies.net")
+    to_pajek(replies_network, "all_replies")
   end
 end
 
@@ -117,9 +117,9 @@ def do_shareds(options = {})
   shareds = shared_thread_list(options)
   shareds_network = network_hash(shareds)
   if options[:window]
-    to_pajek(shareds_network, "w#{options[:window].to_s}_shareds.net", :undirected => true)
+    to_pajek(shareds_network, "w#{options[:window].to_s}_shareds", :undirected => true)
   else
-    to_pajek(shareds_network, "all_shareds.net", :undirected => true)
+    to_pajek(shareds_network, "all_shareds", :undirected => true)
   end
 end
 
@@ -127,7 +127,7 @@ puts '## All'
 do_replies()
 do_shareds()
 
-HOTTools::WINDOWS.size.times do |i|
+TimeTools::WINDOWS.size.times do |i|
   puts "## Window #{i.to_s}"
   do_replies(:window => i)
   do_shareds(:window => i)

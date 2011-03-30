@@ -1,33 +1,20 @@
-require 'rubygems'
+require 'forum_tools'
 require 'active_support/all'
 require 'nokogiri'
 require 'chronic'
 require 'yaml'
-require 'h_n_tools'
+require 'open_struct_array'
 
-$stdout.sync = true
-
-class HNParser < Array
-  attr_reader :file_name, :save_time
-
+class HNParser < OpenStructArray
   def self.all(class_const, file_regexp)
-    file_names = Dir.glob(HNTools::CONFIG[:root_dir] + HNTools::CONFIG[:raw_dir] + file_regexp)
-    list = []
-    file_names.each do |file_name|
-      print "."
-      parser = class_const.new(File.basename(file_name))
-      if parser # drop if deleted
-        list.push(parser)
-      end
-    end
-    print "\n"
-    return list
+    super(class_const,
+        ForumTools::CONFIG[:env_dir] + ForumTools::CONFIG[:raw_dir] + file_regexp)
   end
 
   def initialize(file_name)
-    @file_name = file_name
+    super(file_name)
     set_correction()
-    @save_time = parse_file_time(@file_name)
+    self.save_time = self.parse_file_time(@file_name)
     return self
   end
 
@@ -72,8 +59,9 @@ class HNParser < Array
     return false
   end
 
-  def read_data
-    doc = Nokogiri::HTML(open(HNTools::CONFIG[:root_dir] + HNTools::CONFIG[:raw_dir] + @file_name))
+  def read_html
+    return Nokogiri::HTML(open(
+        ForumTools::CONFIG[:env_dir] + ForumTools::CONFIG[:raw_dir] + @file_name))
   end
 
   def parse_file_time(file_name)
@@ -88,17 +76,17 @@ class HNThreadParser < HNParser
 
   def initialize(file_name)
     super(file_name)
-    doc = read_data()
+    doc = self.read_html()
     i = 0
     thread_title = doc.at_css('td.title a')
     if thread_title
-      @title_string = thread_title.content.to_s.strip
+      self.title_string = thread_title.content.to_s.strip
       if @title_string =~ /^Poll/
-        @type = "poll"
+        self.type = "poll"
       elsif @title_string =~ /^Ask/
-        @type = "ask"
+        self.type = "ask"
       else
-        @type = "normal"
+        self.type = "normal"
       end
     else # deleted thread
       return false
@@ -135,14 +123,7 @@ class HNThreadParser < HNParser
   def save
     file_name = @file_name.gsub("thread_final", "thread")
     file_name.gsub!(/_\d+.html/, ".yaml")
-    HNTools::File.save_yaml(file_name, self)
-  end
-
-  def to_yaml
-    return {:save_time => @save_time, 
-        :title_string => @title_string,
-        :type => @type,
-        :items => self.to_a}.to_yaml
+    ForumTools::File.save_yaml(file_name, self)
   end
 end
 
@@ -153,7 +134,7 @@ class HNCommentsParser < HNParser
 
   def initialize(file_name)
     super(file_name)
-    doc = read_data()
+    doc = self.read_html()
     i = 0
     doc.css('td.default').each do |post|
       title_line = post.at_css('span.comhead')
@@ -171,7 +152,7 @@ class HNIndexParser < HNParser
 
   def initialize(file_name)
     super(file_name)
-    doc = read_data()
+    doc = self.read_html()
     i = 0
     doc.css('td.subtext').each do |title_line|
       title_hash = parse_title_line(title_line)
@@ -185,8 +166,6 @@ class HNIndexParser < HNParser
 end
 
 class HNUserParser < HNParser
-  attr_reader :user, :time, :karma, :avg_karma
-
   def self.all
     return HNParser.all(HNUserParser, "user*")
   end
@@ -194,7 +173,7 @@ class HNUserParser < HNParser
   def initialize(file_name)
     super(file_name)
     hash = {}
-    doc = read_data()
+    doc = self.read_html()
     i = 0
     doc.css('table form table tr').each do |aspect|
       if i < 4
@@ -209,24 +188,16 @@ class HNUserParser < HNParser
       end
       i += 1
     end
-    @signup_time = Chronic.parse(hash[:created], :now => @save_time).to_i + @correction
-    @user = hash[:user]
-    @karma = hash[:karma].to_i
-    @average_rating = hash[:avg].to_f
+    self.signup_time = Chronic.parse(hash[:created], :now => @save_time).to_i + @correction
+    self.user = hash[:user]
+    self.karma = hash[:karma].to_i
+    self.average_rating = hash[:avg].to_f
     return self
   end
 
   def save
     file_name = @file_name.gsub("user_grun_", "user_")
     file_name.gsub!(/_\d+.html/, ".yaml")
-    HNTools::File.save_yaml(file_name, self)
-  end
-
-  def to_yaml
-    return {:save_time => @save_time, 
-        :signup_time => @signup_time,
-        :user => @user,
-        :karma => @karma,
-        :average_rating => @average_rating}.to_yaml
+    ForumTools::File.save_yaml(file_name, self)
   end
 end

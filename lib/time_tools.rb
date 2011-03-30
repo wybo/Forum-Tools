@@ -1,9 +1,9 @@
 require 'rubygems'
 require 'active_support/all'
 
-class HOTTools
+class TimeTools
   CONFIG = {} 
-  CONFIG[:start_of_time] = Time.gm(2011, "feb", 1)
+  CONFIG[:data_start_time] = Time.gm(2011, "feb", 1)
 
   WINDOWS = []
   (0..22).each do |i|
@@ -12,7 +12,7 @@ class HOTTools
   WINDOWS << [23, 0]
 
   def self.in_time_window(window, time)
-    hour = HOTTools.hour(time)
+    hour = TimeTools.hour(time)
     if hour == WINDOWS[window][0] or hour == WINDOWS[window][1]
       return true
     else
@@ -25,6 +25,6 @@ class HOTTools
   end
 
   def self.day(time)
-    return Time.at(time).yday - HOTTools::CONFIG[:start_of_time].yday
+    return Time.at(time).yday - TimeTools::CONFIG[:data_start_time].yday
   end
 end
