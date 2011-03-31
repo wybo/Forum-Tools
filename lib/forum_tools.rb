@@ -11,62 +11,15 @@ class ForumTools
     CONFIG.merge!(options)
   end
 
-  class OpenStructArray
-    attr_accessor :file_name
-
-    def self.all(class_const, glob_dir_file_name)
-      file_names = Dir.glob(glob_dir_file_name)
-      list = []
-      file_names.each do |file_name|
-        list.push(class_const.new(File.basename(file_name)))
-      end
-      return list
-    end
-
-    def initialize(file_name)
-      @file_name = file_name
-      @spec_attributes = {}
-    end
-
-    def to_yaml
-      hash = {}
-      @spec_attributes.keys.each do |attr|
-        hash[attr] = self.send(attr)
-      end
-      return hash.merge(:items => self.to_a).to_yaml
-    end
-
-    def clear
-      super.delete_if { true } # using clear for some reason gives stack level too deep
-      @spec_attributes.clear()
-    end
-
-    def items=(items)
-      items.each do |item|
-        self << item
-      end
-    end
-
-  def method_missing(method_id, *arguments)
-    if method_id.to_s =~ /^.*=$/
-      new_attribute = method_id.to_s.gsub("=","").to_sym
-      str = <<-EOS
-        attr_reader :#{new_attribute}
-        def #{new_attribute}=(value)
-          @#{new_attribute} = value
-          @spec_attributes[:#{new_attribute}] = 1
-        end
-      EOS
-      self.class.class_eval str
-      self.send(method_id, *arguments)
-    else
-      super(method_id, *arguments)
-    end
-  end
-
-  end
-
   class File
+    def self.clear_dirs
+      if CONFIG[:env_dir] == CONFIG[:production_dir]
+        raise "Cannot clear dir as this would delete all files"
+      end
+      FileUtils.rm_rf(CONFIG[:env_dir] + CONFIG[:data_dir])
+      FileUtils.rm_rf(CONFIG[:env_dir] + CONFIG[:var_dir])
+    end
+
     def self.init_dirs
       FileUtils.mkdir_p(CONFIG[:env_dir] + CONFIG[:raw_dir])
       FileUtils.mkdir_p(CONFIG[:env_dir] + CONFIG[:yaml_dir])
@@ -76,7 +29,7 @@ class ForumTools
     end
 
     def self.fetch_html(file_prefix, url)
-      file_prefix = File.basename(file_prefix, ".html")
+      file_prefix = ::File.basename(file_prefix, ".html")
       before = Time.now
       resp = Net::HTTP.get(URI.parse(url))
       after = Time.now
@@ -97,9 +50,11 @@ class ForumTools
 
     def self.read_yaml(file_prefix, options = {})
       dir_file_name = self.yaml_dir_file_name(file_prefix, options)
+      structure = false
       if ::File.exists?(dir_file_name)
         structure = YAML.load(open(dir_file_name))
-      else
+      end
+      if !structure # YAML returns false if no valid / empty file
         structure = {}
       end
       return structure
@@ -110,12 +65,6 @@ class ForumTools
       if ::File.exists?(dir_file_name)
         ::File.delete(dir_file_name)
       end
-    end
-
-    def self.save_pajek(file_prefix, string)
-      file_name = self.set_extension(file_prefix, ".net")
-      open(CONFIG[:env_dir] + CONFIG[:pajek_dir] + file_name, "w") { |file|
-          file.write(string) }
     end
 
     def self.save_stat(file_prefix, array)
@@ -140,6 +89,51 @@ class ForumTools
       open(CONFIG[:env_dir] + CONFIG[:stat_dir] + file_name, "w") { |file|
           file.write(lines.join("\n") + "\n") }
     end
+
+    def self.save_pajek(file_prefix, network_hash, options = {})
+      if options[:undirected]
+        edges = "Edges"
+      else
+        edges = "Arcs"
+      end
+
+      keys = []
+      network_hash.each_pair do |key1, hash|
+        keys << key1
+        hash.keys.each do |key2|
+          keys << key2
+        end
+      end
+      keys.sort!
+      keys.uniq!
+
+      keys_hash = {}
+      i = 1
+      keys.each do |key|
+        keys_hash[key] = i
+        i += 1
+      end
+
+      lines = ["*Vertices #{keys.size.to_s}"]
+      keys.each do |key|
+        lines << "#{keys_hash[key].to_s} \"#{key}\""
+      end
+      lines << "*#{edges}"
+      network_hash.keys.sort.each do |key1|
+        network_hash[key1].each_pair do |key2, weight|
+          lines << "#{keys_hash[key1].to_s} #{keys_hash[key2].to_s} #{weight.to_s}"
+        end
+      end
+      file_name = self.set_extension(file_prefix, ".net")
+      open(CONFIG[:env_dir] + CONFIG[:pajek_dir] + file_name, "w") { |file|
+          file.write(lines.join("\n") + "\n") }
+    end
+
+    def self.parse_file_time(file_name)
+      return file_name.split('_')[-1].split('.')[0].to_i
+    end
+
+    ### Helpers
 
     def self.set_extension(file_prefix, extension)
       return ::File.basename(file_prefix, extension) + extension

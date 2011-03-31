@@ -3,8 +3,6 @@ require 'config'
 require 'parsers'
 require 'stores'
 
-initialize_environment(ARGV)
-
 puts '### Parsing Hacker News data'
 
 def parse_threads
@@ -77,7 +75,7 @@ def prune
   ThreadStore.all.each do |thread|
     print "."
     delete = false
-    if !thread.respond_to?(:on_frontpage_time) or !thread.on_frontpage_time
+    if !thread.respond_to?(:on_frontpage_time) or thread.on_frontpage_time.nil?
       delete = true
     end
     if thread.empty?
@@ -97,20 +95,53 @@ def prune
 end
 
 def parse_users
-  puts '# Parsing users from html'
-  HNUserParser.all.each do |user|
-    user.save
+  puts '# Parsing users'
+  puts 'from stores'
+  posts_for_each_user_hash = {}
+  ThreadStore.all.each do |thread|
+    thread.each do |post|
+      if !posts_for_each_user_hash[post[:user]]
+        posts_for_each_user_hash[post[:user]] = 0
+      end
+      posts_for_each_user_hash[post[:user]] += 1
+    end
   end
+  other_for_each_user_hash = {}
+  puts 'from html if available'
+  HNUserParser.all.each do |user|
+    other_for_each_user_hash[user.name] = user.to_hash
+  end
+  store = UsersStore.new()
+  store.clear()
+  posts_for_each_user_hash.each_pair do |name, posts|
+    if other_for_each_user_hash[name]
+      user = other_for_each_user_hash[name]
+    else
+      user = {}
+    end
+    user[:name] = name
+    user[:posts] = posts
+    store << user
+  end
+  store.save
 end
 
 def parse_all
   parse_threads()
   parse_all_times()
   calculate_canonical_times()
-  update_thread_post_times()
-  set_on_frontpage_times()
-  prune()
+  # update_thread_post_times()
+  # set_on_frontpage_times()
+  # prune()
+  # parse_users()
 end
 
-parse_all()
-#parse_users()
+args = ARGV.to_a
+if args[0] == "user"
+  args.delete_at(0)
+  initialize_environment(args)
+  parse_users()
+else
+  initialize_environment(args)
+  parse_all()
+end

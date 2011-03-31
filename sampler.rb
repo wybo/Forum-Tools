@@ -5,7 +5,6 @@ require 'active_support/all'
 initialize_environment(ARGV)
 
 def sample(options = {})
-  puts options.inspect
   start_time = ForumTools::CONFIG[:data_start_time]
   if options[:time_offset]
     start_time += options[:time_offset]
@@ -20,8 +19,8 @@ def sample(options = {})
   file_names = Dir.glob(ForumTools::CONFIG[:production_dir] +
       ForumTools::CONFIG[:raw_dir] + "*")
   file_names.each do |file_name|
-    if File.new(file_name).mtime > start_time and
-        File.new(file_name).mtime < end_time
+    time = Time.at(ForumTools::File.parse_file_time(file_name))
+    if time > start_time and time < end_time
       list << File.basename(file_name)
     end
   end
@@ -30,10 +29,7 @@ def sample(options = {})
 end
 
 def populate(list)
-  if ForumTools::CONFIG[:env_dir] == ForumTools::CONFIG[:production_dir]
-    raise "Cannot populate production dir as this would delete all files"
-  end
-  FileUtils.rm_rf(ForumTools::CONFIG[:env_dir] + ForumTools::CONFIG[:data_dir])
+  ForumTools::File.clear_dirs()
   ForumTools::File.init_dirs()
 
   puts "# Copying files"

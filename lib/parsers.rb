@@ -13,19 +13,19 @@ class HNParser < OpenStructArray
 
   def initialize(file_name)
     super(file_name)
-    set_correction()
-    self.save_time = self.parse_file_time(@file_name)
+    set_save_time()
     return self
   end
 
-  def set_correction
+  def set_save_time
     if @file_name =~ /_grun_/
-      @correction = (3.minutes + 4.seconds).to_i * -1
+      correction = (2.minutes).to_i * -1
     elsif @file_name =~ /_eeep_/
-      @correction = (3.minutes).to_i * -1
+      correction = (3.minutes).to_i * -1
     else
-      @correction = 0
+      correction = 0
     end
+    self.save_time = ForumTools::File.parse_file_time(@file_name) + correction
   end
 
   def parse_title_line(title_line)
@@ -52,7 +52,7 @@ class HNParser < OpenStructArray
         time_ago = $1
         raise 'Missing time in file ' + @file_name + ': ' + line if !time_ago
         data[:time_string] = time_ago
-        data[:time] = Chronic.parse(time_ago, :now => @save_time).to_i + @correction
+        data[:time] = Chronic.parse(time_ago, :now => @save_time).to_i
         return data
       end
     end
@@ -62,10 +62,6 @@ class HNParser < OpenStructArray
   def read_html
     return Nokogiri::HTML(open(
         ForumTools::CONFIG[:env_dir] + ForumTools::CONFIG[:raw_dir] + @file_name))
-  end
-
-  def parse_file_time(file_name)
-    return file_name.split('_')[-1].split('.')[0].to_i + @correction
   end
 end
 
@@ -188,16 +184,13 @@ class HNUserParser < HNParser
       end
       i += 1
     end
-    self.signup_time = Chronic.parse(hash[:created], :now => @save_time).to_i + @correction
-    self.user = hash[:user]
+    self.signup_time = Chronic.parse(hash[:created], :now => @save_time).to_i
+    self.name = hash[:user]
     self.karma = hash[:karma].to_i
     self.average_rating = hash[:avg].to_f
+    if !self.respond_to?(:posts) or self.posts.nil?
+      self.posts = 0
+    end
     return self
-  end
-
-  def save
-    file_name = @file_name.gsub("user_grun_", "user_")
-    file_name.gsub!(/_\d+.html/, ".yaml")
-    ForumTools::File.save_yaml(file_name, self)
   end
 end

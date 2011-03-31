@@ -15,9 +15,14 @@ def initialize_environment(args)
 
   # Sampling time-ranges for environments
   ForumTools.config(:samples => {
-      :test => {:time_offset => 2.days, :time_span => 26.hours},
+      :test => {:time_offset => 2.days, :time_span => 2.days},
       :febmar => {:end_time => Time.utc(2011,"apr",1)}
   })
+
+  # Minimum number of posts required if in prolific category
+  ForumTools.config(:prolific_cutoff => (ForumTools::CONFIG[:environment] == "test" ? 3 : 25))
+  ForumTools.config(:replies_cutoff => (ForumTools::CONFIG[:environment] == "test" ? 2 : 5))
+  ForumTools.config(:shareds_cutoff => (ForumTools::CONFIG[:environment] == "test" ? 2 : 10))
 
   # Overall root
   ForumTools.config(:root_dir => "/home/wybo/projects/hnscraper/")

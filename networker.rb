@@ -65,61 +65,77 @@ def network_hash(reply_list)
   return network_hash
 end
 
-def to_pajek(network_hash, file_name, options = {})
-  puts '# Saving as pajek'
-  if options[:undirected]
-    edges = "Edges"
+def undirect(network_hash)
+  network_hash.keys.sort.each do |user1|
+    network_hash[user1].keys.sort.each do |user2|
+      if network_hash[user2] and network_hash[user2][user1]
+        network_hash[user1][user2] += network_hash[user2][user1]
+        network_hash[user2].delete(user2)
+      end
+    end
+  end
+  return delete_empty_hashes(network_hash)
+end
+
+def prune(network_hash, options = {})
+  users = UsersStore.new()
+  prolific_user_hash = users.prolific_hash()
+  if options[:custom_cutoff]
+    network_hash.keys.each do |user1|
+      network_hash[user1].keys.each do |user2|
+        if network_hash[user1][user2] < options[:custom_cutoff]
+          network_hash[user1].delete(user2)
+        end
+      end
+    end
   else
-    edges = "Arcs"
-  end
-
-  keys = []
-  network_hash.each_pair do |key1, hash|
-    keys << key1
-    hash.keys.each do |key2|
-      keys << key2
+    network_hash.keys.each do |user1|
+      if !prolific_user_hash[user1]
+        network_hash.delete(user1)
+      else
+        network_hash[user1].keys.each do |user2|
+          if !prolific_user_hash[user2]
+            network_hash[user1].delete(user2)
+          end
+        end
+      end
     end
   end
-  keys.sort!
-  keys.uniq!
+  return delete_empty_hashes(network_hash)
+end
 
-  keys_hash = {}
-  i = 1
-  keys.each do |key|
-    keys_hash[key] = i
-    i += 1
-  end
-
-  lines = ["*Vertices #{keys.size.to_s}"]
-  keys.each do |key|
-    lines << "#{keys_hash[key].to_s} \"#{key}\""
-  end
-  lines << "*#{edges}"
-  network_hash.keys.sort.each do |key1|
-    network_hash[key1].each_pair do |key2, weight|
-      lines << "#{keys_hash[key1].to_s} #{keys_hash[key2].to_s} #{weight.to_s}"
+def delete_empty_hashes(network_hash)
+  network_hash.keys.each do |user|
+    if network_hash[user].empty?
+      network_hash.delete(user)
     end
   end
-  ForumTools::File.save_pajek(file_name, lines.join("\n") + "\n")
+  return network_hash
 end
 
 def do_replies(options = {})
   replies = reply_list(options)
   replies_network = network_hash(replies)
-  if options[:window]
-    to_pajek(replies_network, "w#{options[:window].to_s}_replies")
-  else
-    to_pajek(replies_network, "all_replies")
-  end
+  save_network("replies", replies_network, options)
+  undirected_replies_network = undirect(replies_network)
+  pruned_undirected_replies_network = prune(undirected_replies_network, :custom_cutoff => ForumTools::CONFIG[:replies_cutoff])
+  save_network("pruned_undirected_replies",
+      pruned_undirected_replies_network, options.merge(:undirected => true))
 end
 
 def do_shareds(options = {})
   shareds = shared_thread_list(options)
   shareds_network = network_hash(shareds)
+  save_network("shareds", shareds_network, options.merge(:undirected => true))
+  pruned_shareds_network = prune(shareds_network, :custom_cutoff => ForumTools::CONFIG[:shareds_cutoff])
+  save_network("pruned_shareds_network", pruned_shareds_network, options.merge(:undirected => true))
+end
+
+def save_network(file_infix, network_hash, options = {})
   if options[:window]
-    to_pajek(shareds_network, "w#{options[:window].to_s}_shareds", :undirected => true)
+    ForumTools::File.save_pajek("w#{options[:window].to_s}_#{file_infix}", network_hash)
   else
-    to_pajek(shareds_network, "all_shareds", :undirected => true)
+    ForumTools::File.save_pajek("all_#{file_infix}", network_hash)
   end
 end
 
@@ -132,3 +148,7 @@ TimeTools::WINDOWS.size.times do |i|
   do_replies(:window => i)
   do_shareds(:window => i)
 end
+
+# TODO
+# Drop those with less than 2 replies
+# Make undirected, add up all, and again cut at 5 or so

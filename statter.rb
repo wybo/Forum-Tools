@@ -5,7 +5,7 @@ require 'time_tools'
 
 initialize_environment(ARGV)
 
-puts '### Gathering descriptives'
+puts '### Gathering statistics'
 
 def simple
   puts '# Listings'
@@ -27,8 +27,9 @@ def simple
   ForumTools::File.save_stat("width_for_each_thread", ["width"].concat(width_for_each_thread))
 
   puts 'Posts for each user'
-  posts_for_each_user_hash = get_posts_for_each_user(threads)
-  posts_for_each_user = posts_for_each_user_hash.values.sort.reverse
+  
+  users = UsersStore.new()
+  posts_for_each_user = users.collect {|user| user[:posts]}.sort.reverse
   ForumTools::File.save_stat("posts_for_each_user", ["posts"].concat(posts_for_each_user))
 
   puts '# Totals'
@@ -46,7 +47,7 @@ def simple
   ForumTools::File.save_stat("total_posts", ["posts", all_posts.size])
 
   puts 'Users'
-  ForumTools::File.save_stat("total_users", ["users", posts_for_each_user_hash.keys.size])
+  ForumTools::File.save_stat("total_users", ["users", users.size])
 end
 
 def over_time
@@ -82,12 +83,12 @@ end
 def per_user_over_time
   puts '# Per user daily peak'
   threads = ThreadStore.all()
-  cutoff = (ForumTools::CONFIG[:environment] == "test" ? 5 : 24)
-  posts_for_each_user_hash = get_posts_for_each_user(threads)
+  users = UsersStore.new()
+  prolific_user_hash = users.prolific_hash()
   times_for_each_prolific_user_hash = {}
   threads.each do |thread|
     thread.each do |post|
-      if posts_for_each_user_hash[post[:user]] > cutoff
+      if prolific_user_hash[post[:user]]
         if !times_for_each_prolific_user_hash[post[:user]]
           times_for_each_prolific_user_hash[post[:user]] = []
         end
@@ -115,6 +116,14 @@ def per_user_over_time
       columnize_users_hash(aligned_posts_per_hour_for_each_prolific_user))
 end
 
+def measures
+  puts "# Distance measures"
+  puts "Time between post and each of its replies for all posts"
+  puts "Median daily time distance between each users posts"
+  # On 24h circular scale, max distance 12 hours
+  puts "Distance between each user in network"
+end
+
 ### Helper methods
 
 def per_period_adder(times, hour_day)
@@ -134,23 +143,9 @@ def per_period_adder(times, hour_day)
   return x_for_each_y
 end
 
-def get_posts_for_each_user(threads)
-  posts_for_each_user_hash = {}
-  threads.each do |thread|
-    thread.each do |post|
-      if !posts_for_each_user_hash[post[:user]]
-        posts_for_each_user_hash[post[:user]] = 0
-      end
-      posts_for_each_user_hash[post[:user]] += 1
-    end
-  end
-  return posts_for_each_user_hash
-end
-
 def columnize_users_hash(user_hash)
   columns = []
   user_hash.keys.sort.each do |user|
-    puts [user].concat(user_hash[user]).size
     columns << [user].concat(user_hash[user])
   end
   return columns

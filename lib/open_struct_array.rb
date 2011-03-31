@@ -18,18 +18,29 @@ class OpenStructArray < Array
     self.file_name = file_name
   end
 
-  def to_yaml
+  def to_hash
     hash = {}
     @spec_attributes.keys.each do |attr|
       if attr != :file_name
         hash[attr] = self.send(attr)
       end
     end
-    return hash.merge(:items => self.to_a).to_yaml
+    if !self.empty?
+      hash.merge!(:items => self.to_a)
+    end
+    return hash
+  end
+
+  def to_yaml
+    self.to_hash.to_yaml
+  end
+
+  def clear_array
+    self.delete_if { true } # as alternative to clear
   end
 
   def clear
-    super.delete_if { true } # using clear for some reason gives stack level too deep
+    self.clear_array()
     @spec_attributes.clear()
   end
 

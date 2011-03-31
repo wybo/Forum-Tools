@@ -44,7 +44,7 @@ class Runner
       :prepare => [
           "./parser.rb [<environment>]",
           "./networker.rb [<environment>]",
-          "./describer.rb [<environment>]"],
+          "./statter.rb [<environment>]"],
       :user => [
           "./production/user_scraper.rb [<environment>]",
           "./parser.rb user [<environment>]"]

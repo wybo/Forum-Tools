@@ -66,9 +66,16 @@ class AllTimesStore < Store
       hash[item[:id]].push(item[:time])
     end
     array = []
+    max_variance = 0
     hash.each_pair do |key, times|
       canonical_time = 0
       if times.size > 1
+        if times.max - times.min > max_variance
+          max_variance = times.max - times.min
+          if max_variance > 300
+            raise "Variance in time too big #{key}: #{max_variance.to_s}"
+          end
+        end
         adder = 0
         times.each do |time|
           adder += time
@@ -79,7 +86,29 @@ class AllTimesStore < Store
       end
       array.push({:id => key, :time => canonical_time})
     end
+    puts "max variance: #{max_variance.to_s} seconds"
     array.sort! {|x,y| x[:id] <=> y[:id] }
+    # Now make sure times are ordered as well
+    for i in 1...(array.size) do
+      if array[i][:time] < array[i - 1][:time]
+        if array[i] and array[i + 1][:time] > array[i - 1][:time]
+          array[i][:time] = TimesStore.id_fraction_time(array[i][:id],
+              array[i - 1][:time], array[i + 1][:time],
+              array[i - 1][:id], array[i + 1][:id])
+        else
+          array[i][:time] = array[i - 1][:time]
+        end
+      end
+    end
+    max_gap = 0
+    last_time_hash = array[0]
+    array.each do |time_hash|
+      if last_time_hash[:time] - time_hash[:time] > max_gap
+        max_gap = last_time_hash[:time] - time_hash[:time]
+      end
+      last_time_hash = time_hash
+    end
+    puts "max gap: #{(max_gap / 60.0).ceil.to_s} minutes"
     return TimesStore.new(:array => array)
   end
 end
@@ -102,20 +131,10 @@ class TimesStore < Store
       # (smaller than first for which data, or larger than last)
       return nil
     end
-    id_before = self[i_before][:id]
-    id_after = self[i_before + 1][:id]
-    time_before = self[i_before][:time]
-    time_after = self[i_before + 1][:time]
 
-    id_gap = id_after - id_before
-    #    gap = B <------------------> A
-    id_offset = id - id_before
-    # offset = B <--------------> Id
-    fraction = (id_offset * 1.0) / id_gap
-    #  fract = offset / gap = 0.8
-    time_gap = time_after - time_before
-    time = time_before + (time_gap * fraction).to_i
-    return time
+    return TimesStore.id_fraction_time(id,
+        self[i_before][:time], self[i_before + 1][:time],
+        self[i_before][:id], self[i_before + 1][:id])
   end
 
   def find_before_index(id, i_start, i_end)
@@ -129,23 +148,55 @@ class TimesStore < Store
       find_before_index(id, i_start, middle)
     end
   end
+
+  ### Helpers
+
+  def self.id_fraction_time(id, time_before, time_after, id_before, id_after)
+    id_gap = id_after - id_before
+    #    gap = B <------------------> A
+    id_offset = id - id_before
+    # offset = B <--------------> Id
+    fraction = (id_offset * 1.0) / id_gap
+    #  fract = offset / gap = 0.8
+    time_gap = time_after - time_before
+    time = time_before + (time_gap * fraction).to_i
+    return time
+  end
 end
 
-class UserStore < Store
-  def self.all
-    return Store.all(ThreadStore, "user*")
+class UsersStore < Store
+  def initialize()
+    super("users")
   end
 
-  def initialize(options = {})
-    if options.kind_of?(String)
-      if options =~ /^user_/
-        super(options)
-      else
-        super("user_" + options)
-      end
-    else
-      raise 'Invalid options: ' + options.inspect
+  def hash
+    hash = {}
+    self.each do |user|
+      hash[user.name] = user
     end
+    return hash
+  end
+
+  def prolific
+    array = []
+    self.each do |user|
+      if user[:posts] >= ForumTools::CONFIG[:prolific_cutoff]
+        array << user
+      end
+    end
+    return array
+  end
+
+  def prolific_hash
+    hash = {}
+    self.prolific.each do |user|
+      hash[user[:name]] = 1
+    end
+    return hash
+  end
+
+  def to_yaml
+    self.sort! {|a,b| a[:name] <=> b[:name]}
+    super
   end
 end
-
