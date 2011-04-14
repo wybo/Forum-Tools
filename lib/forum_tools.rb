@@ -23,7 +23,7 @@ class ForumTools
     def self.init_dirs
       FileUtils.mkdir_p(CONFIG[:env_dir] + CONFIG[:raw_dir])
       FileUtils.mkdir_p(CONFIG[:env_dir] + CONFIG[:yaml_dir])
-      FileUtils.mkdir_p(CONFIG[:env_dir] + CONFIG[:pajek_dir])
+      FileUtils.mkdir_p(CONFIG[:env_dir] + CONFIG[:net_dir])
       FileUtils.mkdir_p(CONFIG[:env_dir] + CONFIG[:stat_dir])
       FileUtils.mkdir_p(CONFIG[:env_dir] + CONFIG[:var_dir])
     end
@@ -90,6 +90,16 @@ class ForumTools
           file.write(lines.join("\n") + "\n") }
     end
 
+    def self.parse_file_time(file_name)
+      return file_name.split('_')[-1].split('.')[0].to_i
+    end
+
+    def self.save_networks(file_prefix, network_hash, options = {})
+      self.save_pajek(file_prefix, network_hash, options)
+      self.save_gexf(file_prefix, network_hash, options)
+      self.save_graphml(file_prefix, network_hash, options)
+    end
+
     def self.save_pajek(file_prefix, network_hash, options = {})
       if options[:undirected]
         edges = "Edges"
@@ -97,43 +107,218 @@ class ForumTools
         edges = "Arcs"
       end
 
-      keys = []
-      network_hash.each_pair do |key1, hash|
-        keys << key1
-        hash.keys.each do |key2|
-          keys << key2
+      users = self.get_unique_users(network_hash)
+      users_hash = self.get_users_hash(users)
+
+      lines = ["*Vertices #{users.size.to_s}"]
+      colors = ""
+      users.each do |user|
+        if options[:coordinates]
+          coordinates_arr = options[:coordinates][:pajek][user]
+          coordinates = "#{sprintf("%.4f", coordinates_arr[0])} #{sprintf("%.4f", coordinates_arr[1])} 0.0000"
+        else
+          coordinates = "0.0000 0.0000 0.0000"
         end
-      end
-      keys.sort!
-      keys.uniq!
-
-      keys_hash = {}
-      i = 1
-      keys.each do |key|
-        keys_hash[key] = i
-        i += 1
-      end
-
-      lines = ["*Vertices #{keys.size.to_s}"]
-      keys.each do |key|
-        lines << "#{keys_hash[key].to_s} \"#{key}\""
+        if options[:colors]
+          colors = " " + coordinates + " " + options[:colors][:pajek][user].join(" ")
+        end
+        lines << "#{users_hash[user].to_s} \"#{user}\"#{colors}"
       end
       lines << "*#{edges}"
-      network_hash.keys.sort.each do |key1|
-        network_hash[key1].each_pair do |key2, weight|
-          lines << "#{keys_hash[key1].to_s} #{keys_hash[key2].to_s} #{weight.to_s}"
+      network_hash.keys.sort.each do |user1|
+        network_hash[user1].keys.sort.each do |user2|
+          weight = network_hash[user1][user2]
+          lines << "#{users_hash[user1].to_s} #{users_hash[user2].to_s} #{weight.to_s}"
         end
       end
       file_name = self.set_extension(file_prefix, ".net")
-      open(CONFIG[:env_dir] + CONFIG[:pajek_dir] + file_name, "w") { |file|
+      open(CONFIG[:env_dir] + CONFIG[:net_dir] + file_name, "w") { |file|
           file.write(lines.join("\n") + "\n") }
     end
 
-    def self.parse_file_time(file_name)
-      return file_name.split('_')[-1].split('.')[0].to_i
+    def self.save_gexf(file_prefix, network_hash, options = {})
+      chunks = []
+      chunks << <<-EOS
+<?xml version="1.0" encoding="UTF-8"?>
+<gexf xmlns="http://www.gexf.net/1.1draft" version="1.1" xmlns:viz="http://www.gexf.net/1.1draft/viz" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.gexf.net/1.1draft http://www.gexf.net/1.1draft/gexf.xsd">
+  <meta lastmodifieddate="#{Time.now.strftime("%Y-%m-%d")}">
+    <creator>ForumTools</creator>
+    <description></description>
+  </meta>
+  <graph mode="static" defaultedgetype="#{(options[:undirected] ? "undirected" : "directed")}" timeformat="double">
+    <nodes>
+EOS
+      users = self.get_unique_users(network_hash)
+      users_hash = self.get_users_hash(users)
+      users.each do |user|
+        chunks << <<-EOS
+      <node id="#{users_hash[user]}" label="#{user}">
+        <attvalues></attvalues>
+EOS
+        if options[:colors]
+          colors = options[:colors][:gexf][user]
+          chunks << <<-EOS
+        <viz:color r="#{colors[0]}" g="#{colors[1]}" b="#{colors[2]}" a="0.8"></viz:color>
+EOS
+        end
+        if options[:coordinates]
+          coordinates = options[:coordinates][:gexf][user]
+          chunks << <<-EOS
+        <viz:position x="#{sprintf("%.4f", coordinates[0])}" y="#{sprintf("%.4f", coordinates[1])}"></viz:position>
+EOS
+        end
+        chunks << <<-EOS
+      </node>
+EOS
+      end
+      chunks << <<-EOS
+    </nodes>
+    <edges>
+EOS
+      i = 0
+      network_hash.keys.sort.each do |user1|
+        network_hash[user1].keys.sort.each do |user2|
+          weight = network_hash[user1][user2]
+            chunks << <<-EOS
+      <edge id="#{i.to_s}" source="#{users_hash[user1]}" target="#{users_hash[user2]}">
+        <attvalues>
+          <attvalue for="weight" value="#{weight}"/>
+        </attvalues>
+      </edge>
+EOS
+          i += 1
+        end
+      end
+      chunks << <<-EOS
+    </edges>
+  </graph>
+</gexf>
+EOS
+      file_name = self.set_extension(file_prefix, ".gexf")
+      open(CONFIG[:env_dir] + CONFIG[:net_dir] + file_name, "w") { |file|
+          file.write(chunks.join()) }
+    end
+
+    def self.save_graphml(file_prefix, network_hash, options = {})
+      chunks = []
+      chunks << <<-EOS
+<?xml version="1.0" encoding="UTF-8"?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns">
+  <key id="V-Degree" for="node" attr.name="Degree" attr.type="string" />
+  <key id="V-In-Degree" for="node" attr.name="In-Degree" attr.type="string" />
+  <key id="V-Out-Degree" for="node" attr.name="Out-Degree" attr.type="string" />
+  <key id="V-Betweenness Centrality" for="node" attr.name="Betweenness Centrality" attr.type="string" />
+  <key id="V-Closeness Centrality" for="node" attr.name="Closeness Centrality" attr.type="string" />
+  <key id="V-Eigenvector Centrality" for="node" attr.name="Eigenvector Centrality" attr.type="string" />
+  <key id="V-PageRank" for="node" attr.name="PageRank" attr.type="string" />
+  <key id="V-Clustering Coefficient" for="node" attr.name="Clustering Coefficient" attr.type="string" />
+  <key id="V-Color" for="node" attr.name="Color" attr.type="string" />
+  <key id="V-Shape" for="node" attr.name="Shape" attr.type="string" />
+  <key id="V-Size" for="node" attr.name="Size" attr.type="string" />
+  <key id="V-Opacity" for="node" attr.name="Opacity" attr.type="string" />
+  <key id="V-Image File" for="node" attr.name="Image File" attr.type="string" />
+  <key id="V-Visibility" for="node" attr.name="Visibility" attr.type="string" />
+  <key id="V-Label" for="node" attr.name="Label" attr.type="string" />
+  <key id="V-Label Fill Color" for="node" attr.name="Label Fill Color" attr.type="string" />
+  <key id="V-Label Position" for="node" attr.name="Label Position" attr.type="string" />
+  <key id="V-Tooltip" for="node" attr.name="Tooltip" attr.type="string" />
+  <key id="V-Layout Order" for="node" attr.name="Layout Order" attr.type="string" />
+  <key id="V-X" for="node" attr.name="X" attr.type="string" />
+  <key id="V-Y" for="node" attr.name="Y" attr.type="string" />
+  <key id="V-Locked?" for="node" attr.name="Locked?" attr.type="string" />
+  <key id="V-Polar R" for="node" attr.name="Polar R" attr.type="string" />
+  <key id="V-Polar Angle" for="node" attr.name="Polar Angle" attr.type="string" />
+  <key id="V-ID" for="node" attr.name="ID" attr.type="string" />
+  <key id="V-Dynamic Filter" for="node" attr.name="Dynamic Filter" attr.type="string" />
+  <key id="V-Add Your Own Columns Here" for="node" attr.name="Add Your Own Columns Here" attr.type="string" />
+  <key id="E-Color" for="edge" attr.name="Color" attr.type="string" />
+  <key id="E-Width" for="edge" attr.name="Width" attr.type="string" />
+  <key id="E-Style" for="edge" attr.name="Style" attr.type="string" />
+  <key id="E-Opacity" for="edge" attr.name="Opacity" attr.type="string" />
+  <key id="E-Visibility" for="edge" attr.name="Visibility" attr.type="string" />
+  <key id="E-Label" for="edge" attr.name="Label" attr.type="string" />
+  <key id="E-Label Text Color" for="edge" attr.name="Label Text Color" attr.type="string" />
+  <key id="E-Label Font Size" for="edge" attr.name="Label Font Size" attr.type="string" />
+  <key id="E-ID" for="edge" attr.name="ID" attr.type="string" />
+  <key id="E-Dynamic Filter" for="edge" attr.name="Dynamic Filter" attr.type="string" />
+  <key id="E-Dynamic Filter" for="edge" attr.name="Dynamic Filter" attr.type="string" />
+  <key id="E-Add Your Own Columns Here" for="edge" attr.name="Add Your Own Columns Here" attr.type="string" />
+  <key id="E-Edge Weight" for="edge" attr.name="Edge Weight" attr.type="string" />
+  <graph edgedefault="undirected">
+  <graph edgedefault="#{(options[:undirected] ? "undirected" : "directed")}">
+EOS
+      users = self.get_unique_users(network_hash)
+      users_hash = self.get_users_hash(users)
+      users.each do |user|
+        chunks << <<-EOS
+    <node id="#{users_hash[user]}">
+      <data key="V-ID">#{users_hash[user]}</data>
+      <data key="V-Label">#{user}</data>
+EOS
+        if options[:colors]
+          colors = options[:colors][:gexf][user]
+          chunks << <<-EOS
+      <data key="V-Color">#{colors[0]}; #{colors[1]}; #{colors[2]}</data>
+      <data key="V-Opacity">0.8</data>
+EOS
+        end
+        if options[:coordinates]
+          coordinates = options[:coordinates][:graphml][user]
+          chunks << <<-EOS
+      <data key="V-X">#{sprintf("%.4f", coordinates[0])}</data>
+      <data key="V-Y">#{sprintf("%.4f", coordinates[1])}</data>
+EOS
+        end
+        chunks << <<-EOS
+    </node>
+EOS
+      end
+
+      i = 0
+      network_hash.keys.sort.each do |user1|
+        network_hash[user1].keys.sort.each do |user2|
+          weight = network_hash[user1][user2]
+            chunks << <<-EOS
+      <edge source="#{users_hash[user1]}" target="#{users_hash[user2]}">
+        <data key="E-ID">#{i}</data>
+        <data key="E-Edge Weight">#{weight.to_s}</data>
+      </edge>
+EOS
+          i += 1
+        end
+      end
+      chunks << <<-EOS
+  </graph>
+</graphml>
+EOS
+      file_name = self.set_extension(file_prefix, ".graphml")
+      open(CONFIG[:env_dir] + CONFIG[:net_dir] + file_name, "w") { |file|
+          file.write(chunks.join()) }
     end
 
     ### Helpers
+
+    def self.get_unique_users(network_hash)
+      users = []
+      network_hash.each_pair do |user1, hash|
+        users << user1
+        hash.keys.each do |user2|
+          users << user2
+        end
+      end
+      users.sort!
+      return users.uniq
+    end
+
+    def self.get_users_hash(users)
+      users_hash = {}
+      i = 1
+      users.each do |user|
+        users_hash[user] = i
+        i += 1
+      end
+      return users_hash
+    end
 
     def self.set_extension(file_prefix, extension)
       return ::File.basename(file_prefix, extension) + extension
@@ -141,10 +326,15 @@ class ForumTools
 
     def self.yaml_dir_file_name(file_prefix, options)
       file_name = self.set_extension(file_prefix, ".yaml")
-      if options[:var]
-        return CONFIG[:env_dir] + CONFIG[:var_dir] + file_name
+      if options[:env_dir]
+        env_dir = options[:env_dir]
       else
-        return CONFIG[:env_dir] + CONFIG[:yaml_dir] + file_name
+        env_dir = CONFIG[:env_dir]
+      end
+      if options[:var]
+        return env_dir + CONFIG[:var_dir] + file_name
+      else
+        return env_dir + CONFIG[:yaml_dir] + file_name
       end
     end
   end

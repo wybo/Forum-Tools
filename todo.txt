@@ -1,0 +1,80 @@
+Data preparation
+- Support graphml
+- Consider random selection from network
+- Reciprocity, hunt for time effects
+- Test circadian difference
+- Fix weights in Giph
+- Distance measures
+  - time distance between posts in thread without thread
+  - social distance of users (in reply & user-to-thread networks)
+- Proportion that interacts within window / window distance
+- Prettify color coding and legenda
+- Store networks in var
+
+Clusters
+- Cluster-spotting, see if time-related
+- Cluster-coeffs for whole vs parts
+  - also corrected for varying network-sizes
+- Degrees of reciprocity
+- Find way of pruning networks to k-components or random
+
+Regression on social distance versus
+- time distance
+
+## Info
+
+Clusering coeff nr of triplets closed / total nr of triplets, can do
+hash a => b, b => c, c => a. Does vary with network size, no solut.
+
+## Other
+
+E-mail bernie
+
+Wondering about regression over matrix (distances)
+Can turn into lists with same cases but corrections for
+non-independence
+
+## Cut
+
+Bonus
+- Best time to post, karma?
+  - karma with time & with depth
+- Video of network as changes
+
+Not at all
+- karma difference
+- join time distance
+- Geo & time-locate users + spatial distance
+  - spatial distance
+- Time-series
+  - Posts with timezone times overlayed
+- thread distance
+- avg/median thread distance of users posts (transitive min is netw)
+- Threads only briefly on homepage
+  - Low rated
+  - Small
+
+## Old
+
+Post about these things: http://news.ycombinator.com/item?id=2252152
+
+http://hnrecap.com/weekly interferes
+
+Classic mode shows only by old posters
+
+HN getting used to content / learning effects:
+http://news.ycombinator.com/item?id=2252152
+Makes old-timers less interested
+timestamped?
+
+Hackerslide, hourly snapshots with api
+
+HackerSlide stores JSON representations of the HN front page every
+hour (starting Oct 15 2010).
+
+http://hackerslide.com/data/YYYY-MM-DD-HH.json gets you what you want.
+For example: http://hackerslide.com/data/2010-10-15-23.json
+
+http://hackerslide.com/
+
+HN secret cabal IRC channel, #startups

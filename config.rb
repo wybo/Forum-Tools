@@ -15,14 +15,16 @@ def initialize_environment(args)
 
   # Sampling time-ranges for environments
   ForumTools.config(:samples => {
-      :test => {:time_offset => 2.days, :time_span => 2.days},
-      :febmar => {:end_time => Time.utc(2011,"apr",1)}
+      :test => {:start_time => Time.utc(2011,"feb",2), :end_time => Time.utc(2011,"feb",4)},
+      :febmar => {:end_time => Time.utc(2011,"apr",2)},
+      :midweek => {:days => [2,3]}
   })
 
   # Minimum number of posts required if in prolific category
   ForumTools.config(:prolific_cutoff => (ForumTools::CONFIG[:environment] == "test" ? 3 : 25))
-  ForumTools.config(:replies_cutoff => (ForumTools::CONFIG[:environment] == "test" ? 2 : 5))
-  ForumTools.config(:shareds_cutoff => (ForumTools::CONFIG[:environment] == "test" ? 2 : 10))
+  ForumTools.config(:interaction_cutoff => (ForumTools::CONFIG[:environment] == "test" ? 2 : 7))
+  ForumTools.config(:max_hours_on_frontpage => 8)
+  ForumTools.config(:only_single_peak => false)
 
   # Overall root
   ForumTools.config(:root_dir => "/home/wybo/projects/hnscraper/")
@@ -40,7 +42,7 @@ def initialize_environment(args)
   # Sub-dirs for data
   ForumTools.config(:raw_dir => ForumTools::CONFIG[:data_dir] + "raw/")
   ForumTools.config(:yaml_dir => ForumTools::CONFIG[:data_dir] + "yaml/")
-  ForumTools.config(:pajek_dir => ForumTools::CONFIG[:data_dir] + "pajek/")
+  ForumTools.config(:net_dir => ForumTools::CONFIG[:data_dir] + "net/")
   ForumTools.config(:stat_dir => ForumTools::CONFIG[:data_dir] + "stat/")
 
   # Make sure directories are created

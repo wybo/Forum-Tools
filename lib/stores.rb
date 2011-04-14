@@ -33,9 +33,22 @@ class ThreadStore < Store
     return Store.all(ThreadStore, "thread*")
   end
 
+  def self.max_hours_on_frontpage(max_hours)
+    list = []
+    max_hours_sec = max_hours.hours.to_i + 30.minutes.to_i
+    self.all.each do |thread|
+      if (thread.off_frontpage_time - thread.on_frontpage_time) < max_hours_sec
+        list << thread
+      end
+    end
+    return list
+  end
+
   def initialize(options = {})
     if options.kind_of?(String)
       super(options)
+    elsif options.kind_of?(Hash)
+      super(options[:file_name], options)
     elsif options.kind_of?(Integer)
       super("thread_" + options.to_s)
     else
@@ -172,7 +185,7 @@ class UsersStore < Store
   def hash
     hash = {}
     self.each do |user|
-      hash[user.name] = user
+      hash[user[:name]] = user
     end
     return hash
   end

@@ -3,9 +3,9 @@ require 'config'
 require 'stores'
 require 'time_tools'
 
-initialize_environment(ARGV)
-
 puts '### Gathering statistics'
+
+SLOW = false
 
 def simple
   puts '# Listings'
@@ -56,11 +56,11 @@ def over_time
 
   puts 'Threads for each hour'
   times = threads.collect {|thread| thread[0][:time]}
-  threads_for_each_hour = per_period_adder(times, "hour")
+  threads_for_each_hour = TimeTools.per_period_adder(times, "hour")
   ForumTools::File.save_stat("threads_for_each_hour", ["threads"].concat(threads_for_each_hour))
 
   puts 'Daily'
-  threads_for_each_day = per_period_adder(times, "day")
+  threads_for_each_day = TimeTools.per_period_adder(times, "day")
   ForumTools::File.save_stat("threads_for_each_day", ["threads"].concat(threads_for_each_day))
 
   puts '# Posts over time'
@@ -72,16 +72,16 @@ def over_time
     end
   end
   times = all_posts.collect {|post| post[:time]}
-  posts_for_each_hour = per_period_adder(times, "hour")
+  posts_for_each_hour = TimeTools.per_period_adder(times, "hour")
   ForumTools::File.save_stat("posts_for_each_hour", ["posts"].concat(posts_for_each_hour))
 
   puts 'Daily'
-  posts_for_each_day = per_period_adder(times, "day")
+  posts_for_each_day = TimeTools.per_period_adder(times, "day")
   ForumTools::File.save_stat("posts_for_each_day", ["posts"].concat(posts_for_each_day))
 end
 
 def per_user_over_time
-  puts '# Per user daily peak'
+  puts '# Per user posts'
   threads = ThreadStore.all()
   users = UsersStore.new()
   prolific_user_hash = users.prolific_hash()
@@ -100,17 +100,19 @@ def per_user_over_time
   puts 'Posts per hour for each prolific user'
   posts_per_hour_for_each_prolific_user = {}
   times_for_each_prolific_user_hash.each_pair do |user, times|
-    posts_per_hour_for_each_prolific_user[user] = per_period_adder(times, "hour")
+    posts_per_hour_for_each_prolific_user[user] = TimeTools.per_period_adder(times, "hour")
   end
   ForumTools::File.save_stat("posts_per_hour_for_each_prolific_user",
       columnize_users_hash(posts_per_hour_for_each_prolific_user))
 
   puts 'Aligned posts per hour for each prolific user'
   aligned_posts_per_hour_for_each_prolific_user = {}
-  posts_per_hour_for_each_prolific_user.each_pair do |user, hour_counts|
-    max_index = hour_counts.index(hour_counts.max)
-    new_hour_counts = hour_counts[(max_index - 24)..-1].concat(hour_counts[0...max_index])
-    aligned_posts_per_hour_for_each_prolific_user[user] = new_hour_counts
+  users.each do |user|
+    if prolific_user_hash[user[:name]]
+      hour_counts = posts_per_hour_for_each_prolific_user[user[:name]]
+      aligned_posts_per_hour_for_each_prolific_user[user[:name]] = 
+          hour_counts[(user[:peak_window] - 24)..-1].concat(hour_counts[0...user[:peak_window]])
+    end
   end
   ForumTools::File.save_stat("aligned_posts_per_hour_for_each_prolific_user",
       columnize_users_hash(aligned_posts_per_hour_for_each_prolific_user))
@@ -118,30 +120,57 @@ end
 
 def measures
   puts "# Distance measures"
-  puts "Time between post and each of its replies for all posts"
-  puts "Median daily time distance between each users posts"
-  # On 24h circular scale, max distance 12 hours
+  puts "Time between posts and each reply"
+  threads = ThreadStore.all()
+  time_between_posts_and_each_reply = []
+  indent_stack = []
+  indent_pointer = 0
+  threads.each do |thread|
+    thread.each do |post|
+      indent_pointer = post[:indent]
+      indent_stack[indent_pointer] = post
+      if indent_pointer > 1
+        time_between_posts_and_each_reply << 
+            post[:time] - indent_stack[indent_pointer - 1][:time]
+      end
+    end
+  end
+  ForumTools::File.save_stat("time_between_posts_and_each_reply",
+      ["time"].concat(time_between_posts_and_each_reply))
+
+  if SLOW
+  puts "Median circadian distance between users posts"
+  times_for_each_user_hash = {}
+  threads.each do |thread|
+    thread.each do |post|
+      if !times_for_each_user_hash[post[:user]]
+        times_for_each_user_hash[post[:user]] = []
+      end
+      times_for_each_user_hash[post[:user]] << TimeTools.second_of_day(post[:time])
+    end
+  end
+  median_circadian_distance_between_users_posts = []
+  users = UsersStore.new()
+  users.each do |user1|
+    users.each do |user2|
+      differences = []
+      times_for_each_user_hash[user1[:name]].each do |time1|
+        times_for_each_user_hash[user2[:name]].each do |time2|
+          differences << TimeTools.circadian_difference(time1 - time2)
+        end
+      end
+      median_circadian_distance_between_users_posts <<
+          calculate_median(differences.sort)
+    end
+  end
+  ForumTools::File.save_stat("median_circadian_distance_between_users_posts",
+      ["time"].concat(median_circadian_distance_between_users_posts))
+  end
+
   puts "Distance between each user in network"
 end
 
 ### Helper methods
-
-def per_period_adder(times, hour_day)
-  x_for_each_y = []
-  if hour_day == "hour" # needed for hour alignments
-    24.times do |i|
-      x_for_each_y[i] = 0
-    end
-  end
-  times.each do |time|
-    period = TimeTools.send(hour_day, time)
-    if !x_for_each_y[period]
-      x_for_each_y[period] = 0
-    end
-    x_for_each_y[period] += 1
-  end
-  return x_for_each_y
-end
 
 def columnize_users_hash(user_hash)
   columns = []
@@ -151,6 +180,19 @@ def columnize_users_hash(user_hash)
   return columns
 end
 
+def calculate_median(array)
+  mid = (array.length - 1) / 2
+  if array.length % 2 == 0
+    mid2 = (array.length) / 2
+    return ((array[mid] + array[mid2]) / 2.0).to_i
+  else
+    return array[mid]
+  end
+end
+
+initialize_environment(ARGV)
+
 simple()
 over_time()
 per_user_over_time()
+measures()

@@ -4,8 +4,6 @@ require 'parsers'
 require 'stores'
 require 'time_tools'
 
-initialize_environment(ARGV)
-
 puts '### Extracting directed network'
 
 def reply_list(options = {})
@@ -13,14 +11,24 @@ def reply_list(options = {})
   reply_array = []
   indent_stack = []
   indent_pointer = 0
-  ThreadStore.all.each do |thread|
+  if options[:only_single_peak]
+    users_hash = UsersStore.new().hash()
+  end
+  threads = get_threads(options)
+  threads.each do |thread|
     thread.each do |post|
       indent_pointer = post[:indent]
       indent_stack[indent_pointer] = post
-      if indent_pointer > 0 and (!options[:window] or
-          (TimeTools.in_time_window(options[:window], post[:time]) and
-           TimeTools.in_time_window(options[:window], indent_stack[indent_pointer - 1][:time])))
-        reply_array << [post[:user], indent_stack[indent_pointer - 1][:user]]
+      if indent_pointer > 0
+        previous_post = indent_stack[indent_pointer - 1]
+        if (!options[:window] or
+            (TimeTools.in_time_window(options[:window], post[:time]) and
+             TimeTools.in_time_window(options[:window], indent_stack[indent_pointer - 1][:time]))) and
+           (!options[:only_single_peak] or
+            (users_hash[post[:user]][:single_peak] and
+             users_hash[previous_post[:user]][:single_peak]))
+          reply_array << [post[:user], previous_post[:user]]
+        end
       end
     end
   end
@@ -30,11 +38,17 @@ end
 def shared_thread_list(options = {})
   puts '# Assembling shared thread list'
   shared_thread_list = []
-  ThreadStore.all.each do |thread|
+  if options[:only_single_peak]
+    users_hash = UsersStore.new().hash()
+  end
+  threads = get_threads(options)
+  threads.each do |thread|
     users_list = []
     thread.each do |post|
-      if !options[:window] or 
-          TimeTools.in_time_window(options[:window], post[:time])
+      if (!options[:window] or 
+          TimeTools.in_time_window(options[:window], post[:time])) and
+         (!options[:only_single_peak] or
+          users_hash[post[:user]][:single_peak])
         users_list << post[:user]
       end
     end
@@ -50,7 +64,7 @@ def shared_thread_list(options = {})
   return shared_thread_list
 end
 
-def network_hash(reply_list)
+def network_hash(reply_list, options = {})
   puts '# Building network hash'
   network_hash = {}
   reply_list.each do |pair|
@@ -80,10 +94,10 @@ end
 def prune(network_hash, options = {})
   users = UsersStore.new()
   prolific_user_hash = users.prolific_hash()
-  if options[:custom_cutoff]
+  if options[:interaction_cutoff]
     network_hash.keys.each do |user1|
       network_hash[user1].keys.each do |user2|
-        if network_hash[user1][user2] < options[:custom_cutoff]
+        if network_hash[user1][user2] < options[:interaction_cutoff]
           network_hash[user1].delete(user2)
         end
       end
@@ -113,42 +127,132 @@ def delete_empty_hashes(network_hash)
   return network_hash
 end
 
-def do_replies(options = {})
-  replies = reply_list(options)
-  replies_network = network_hash(replies)
-  save_network("replies", replies_network, options)
-  undirected_replies_network = undirect(replies_network)
-  pruned_undirected_replies_network = prune(undirected_replies_network, :custom_cutoff => ForumTools::CONFIG[:replies_cutoff])
-  save_network("pruned_undirected_replies",
-      pruned_undirected_replies_network, options.merge(:undirected => true))
-end
-
-def do_shareds(options = {})
-  shareds = shared_thread_list(options)
-  shareds_network = network_hash(shareds)
-  save_network("shareds", shareds_network, options.merge(:undirected => true))
-  pruned_shareds_network = prune(shareds_network, :custom_cutoff => ForumTools::CONFIG[:shareds_cutoff])
-  save_network("pruned_shareds_network", pruned_shareds_network, options.merge(:undirected => true))
-end
-
-def save_network(file_infix, network_hash, options = {})
-  if options[:window]
-    ForumTools::File.save_pajek("w#{options[:window].to_s}_#{file_infix}", network_hash)
+def get_threads(options = {})
+  if options[:max_hours_on_frontpage]
+    return ThreadStore.max_hours_on_frontpage(options[:max_hours_on_frontpage])
   else
-    ForumTools::File.save_pajek("all_#{file_infix}", network_hash)
+    return ThreadStore.all()
   end
 end
 
-puts '## All'
-do_replies()
-do_shareds()
+PAJEK_COLORS = ["GreenYellow", "Yellow", "YellowOrange", "Orange", "RedOrange", "Red", 
+          "OrangeRed", "Magenta", "Lavender", "Thistle", "Purple", "Violet",
+          "Blue", "NavyBlue", "CadetBlue", "MidnightBlue", "Cyan", "Turquose",
+          "BlueGreen", "Emerald", "SeaGreen", "Green", "PineGreen", "YellowGreen"]
 
-TimeTools::WINDOWS.size.times do |i|
-  puts "## Window #{i.to_s}"
-  do_replies(:window => i)
-  do_shareds(:window => i)
+WHEEL_PART_PART = []
+4.times do |i|
+  WHEEL_PART_PART << (255 / 4.0).ceil * i
+end
+8.times do
+  WHEEL_PART_PART << 255
+end
+4.times do |i|
+  WHEEL_PART_PART << 255 - (255 / 4.0).ceil * i
+end
+8.times do
+  WHEEL_PART_PART << 0
+end
+WHEEL_PART = WHEEL_PART_PART.concat(WHEEL_PART_PART)
+WHEEL_COLORS = []
+24.times do |i|
+  WHEEL_COLORS << [WHEEL_PART[i + 8], WHEEL_PART[i], WHEEL_PART[i - 8]]
 end
 
-# TODO
-# Drop those with less than 2 replies
-# Make undirected, add up all, and again cut at 5 or so
+def get_window_colors
+  colors_hash = {}
+  colors_hash[:pajek] = {}
+  users = UsersStore.new()
+  users.each do |user|
+    colors_hash[:pajek][user[:name]] = ["ic", PAJEK_COLORS[user[:peak_window]], 
+        "bc", PAJEK_COLORS[user[:peak_window]]]
+  end
+  colors_hash[:gexf] = {}
+  users.each do |user|
+    colors_hash[:gexf][user[:name]] = WHEEL_COLORS[user[:peak_window]]
+  end
+  return colors_hash
+end
+
+COORDINATES = []
+24.times do |i|
+  COORDINATES << [Math.cos(Math::PI / 12 * (i - 6)), Math.sin(Math::PI / 12 * (i + 6))]
+end
+
+def get_window_coordinates
+  coordinates_hash = {}
+  users = UsersStore.new()
+  coordinates_hash[:pajek] = {}
+  coordinates_hash[:gexf] = {}
+  users.each do |user|
+    coordinates = COORDINATES[user[:peak_window]]
+    coordinates_hash[:pajek][user[:name]] = [coordinates[0] * 0.49 + 0.5, coordinates[1] * 0.49 + 0.5]
+    coordinates_hash[:gexf][user[:name]] = [coordinates[0] * 1000, coordinates[1] * 1000]
+    coordinates_hash[:graphml][user[:name]] = [coordinates[0] * 1980 + 2000, coordinates[1] * 1980 + 2000]
+  end
+  return coordinates_hash
+end
+
+def save_network(file_infix, network_hash, options = {})
+  options_string = "U#{options[:undirected].to_s}Icut#{options[:interaction_cutoff].to_s}" +
+      "Mfront#{options[:max_hours_on_frontpage].to_s}Speak#{options[:only_single_peak].to_s}"
+  if options[:window]
+    ForumTools::File.save_networks("W#{options[:window].to_s}#{options_string}_#{file_infix}", network_hash, options)
+  else
+    ForumTools::File.save_networks("All#{options_string}_#{file_infix}", network_hash, options)
+  end
+end
+
+def do_replies(options = {})
+  replies = reply_list(options)
+  replies_network = network_hash(replies, options)
+  if options[:undirected]
+    replies_network = undirect(replies_network)
+  end
+  pruned_replies_network = prune(replies_network, options)
+  save_network("replies", pruned_replies_network, options)
+end
+
+def do_shareds(options = {})
+  options = options.dup
+  options[:undirected] = true
+  shareds = shared_thread_list(options)
+  shareds_network = network_hash(shareds, options)
+  pruned_shareds_network = prune(shareds_network, options)
+  save_network("shareds", pruned_shareds_network, options)
+end
+
+overall_options = {}
+args = ARGV.to_a
+if args[0] == "window"
+  overall_options[:window] = true
+  args.delete_at(0)
+end
+if args[0] == "shareds"
+  overall_options[:shareds] = true
+  args.delete_at(0)
+end
+
+initialize_environment(args)
+
+overall_options.merge!(
+    :interaction_cutoff => ForumTools::CONFIG[:interaction_cutoff],
+    :max_hours_on_frontpage => ForumTools::CONFIG[:max_hours_on_frontpage],
+    :only_single_peak => ForumTools::CONFIG[:only_single_peak],
+    :undirected => true
+)
+
+if overall_options[:window]
+  TimeTools::WINDOWS.size.times do |i|
+    puts "## Window #{i.to_s}"
+    overall_options[:window] = i
+    do_replies(overall_options)
+    do_shareds(overall_options) if overall_options[:shareds]
+  end
+else
+  puts '## All'
+  overall_options[:colors] = get_window_colors()
+  overall_options[:coordinates] = get_window_coordinates()
+  do_replies(overall_options)
+  do_shareds(overall_options) if overall_options[:shareds]
+end

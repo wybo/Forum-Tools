@@ -2,6 +2,7 @@
 require 'config'
 require 'parsers'
 require 'stores'
+require 'time_tools'
 
 puts '### Parsing Hacker News data'
 
@@ -50,20 +51,32 @@ def update_thread_post_times
 end
 
 def set_on_frontpage_times
-  puts '# Estimating time threads appeared on frontpage'
+  puts '# Estimating when threads are on frontpage'
   puts 'reading index pages:'
   indices = HNIndexParser.all("index*")
   indices.sort {|x, y| x.save_time <=> y.save_time}
-  puts 'estimating:'
-  done_hash = {}
+  puts 'estimating when on and off frontpage:'
+  added_hash = {}
+  on_done_hash = {}
   indices.each do |index|
+    current_hash = {}
     print "."
     index.each do |thread|
-      if !done_hash[thread[:id]]
+      current_hash[thread[:id]] = 1
+      if !on_done_hash[thread[:id]]
         full_thread = ThreadStore.new(thread[:id])
         full_thread.on_frontpage_time = index.save_time
         full_thread.save
-        done_hash[thread[:id]] = 1
+        on_done_hash[thread[:id]] = 1
+      end
+    end
+    added_hash.merge!(current_hash)
+    added_hash.keys.each do |id|
+      if !current_hash[id]
+        thread = ThreadStore.new(id)
+        thread.off_frontpage_time = index.save_time
+        thread.save
+        added_hash.delete(id)
       end
     end
   end
@@ -72,10 +85,12 @@ end
 
 def prune
   puts '# Removing incomplete data'
+  end_time = ForumTools::CONFIG[:samples][ForumTools::CONFIG[:environment].to_sym][:end_time].to_i
   ThreadStore.all.each do |thread|
     print "."
     delete = false
-    if !thread.respond_to?(:on_frontpage_time) or thread.on_frontpage_time.nil?
+    if !thread.respond_to?(:on_frontpage_time) or thread.on_frontpage_time.nil? or
+        !thread.respond_to?(:off_frontpage_time) or thread.off_frontpage_time.nil?
       delete = true
     end
     if thread.empty?
@@ -85,6 +100,9 @@ def prune
       if !post[:time]
         delete = true
       end
+    end
+    if !delete and thread[0][:time] > end_time
+      delete = true
     end
     if delete
       puts "\ndeleting " + thread.file_name
@@ -97,14 +115,20 @@ end
 def parse_users
   puts '# Parsing users'
   puts 'from stores'
-  posts_for_each_user_hash = {}
+  times_for_each_user_hash = {}
   ThreadStore.all.each do |thread|
     thread.each do |post|
-      if !posts_for_each_user_hash[post[:user]]
-        posts_for_each_user_hash[post[:user]] = 0
+      if !times_for_each_user_hash[post[:user]]
+        times_for_each_user_hash[post[:user]] = []
       end
-      posts_for_each_user_hash[post[:user]] += 1
+      times_for_each_user_hash[post[:user]] << post[:time]
     end
+  end
+  posts_per_window_for_each_user = {}
+  posts_per_hour_for_each_user = {}
+  times_for_each_user_hash.each_pair do |user, times|
+    posts_per_window_for_each_user[user] = TimeTools.per_period_adder(times, "window")
+    posts_per_hour_for_each_user[user] = TimeTools.per_period_adder(times, "hour")
   end
   other_for_each_user_hash = {}
   puts 'from html if available'
@@ -112,15 +136,22 @@ def parse_users
     other_for_each_user_hash[user.name] = user.to_hash
   end
   store = UsersStore.new()
+  store_for_each_user_hash = store.hash
   store.clear()
-  posts_for_each_user_hash.each_pair do |name, posts|
+  times_for_each_user_hash.each_pair do |name, times|
+    window_counts = posts_per_window_for_each_user[name]
+    peak_window = window_counts.index(window_counts.max)
     if other_for_each_user_hash[name]
       user = other_for_each_user_hash[name]
+    elsif store_for_each_user_hash[name]
+      user = store_for_each_user_hash[name]
     else
       user = {}
     end
     user[:name] = name
-    user[:posts] = posts
+    user[:posts] = times.size
+    user[:peak_window] = peak_window
+    user[:single_peak] = TimeTools.single_peak(peak_window, posts_per_hour_for_each_user[name])
     store << user
   end
   store.save
@@ -130,10 +161,10 @@ def parse_all
   parse_threads()
   parse_all_times()
   calculate_canonical_times()
-  # update_thread_post_times()
-  # set_on_frontpage_times()
-  # prune()
-  # parse_users()
+  update_thread_post_times()
+  set_on_frontpage_times()
+  prune()
+  parse_users()
 end
 
 args = ARGV.to_a
