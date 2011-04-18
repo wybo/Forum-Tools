@@ -84,34 +84,46 @@ def undirect(network_hash)
     network_hash[user1].keys.sort.each do |user2|
       if network_hash[user2] and network_hash[user2][user1]
         network_hash[user1][user2] += network_hash[user2][user1]
-        network_hash[user2].delete(user2)
+        network_hash[user2].delete(user1)
       end
     end
   end
   return delete_empty_hashes(network_hash)
 end
 
-def prune(network_hash, options = {})
+def cutoff_prune(network_hash, cutoff)
+  network_hash.keys.each do |user1|
+    network_hash[user1].keys.each do |user2|
+      if network_hash[user1][user2] < cutoff
+        network_hash[user1].delete(user2)
+      end
+    end
+  end
+  return delete_empty_hashes(network_hash)
+end
+
+def prolific_prune(network_hash)
   users = UsersStore.new()
   prolific_user_hash = users.prolific_hash()
-  if options[:interaction_cutoff]
-    network_hash.keys.each do |user1|
+  network_hash.keys.each do |user1|
+    if !prolific_user_hash[user1]
+      network_hash.delete(user1)
+    else
       network_hash[user1].keys.each do |user2|
-        if network_hash[user1][user2] < options[:interaction_cutoff]
+        if !prolific_user_hash[user2]
           network_hash[user1].delete(user2)
         end
       end
     end
-  else
-    network_hash.keys.each do |user1|
-      if !prolific_user_hash[user1]
-        network_hash.delete(user1)
-      else
-        network_hash[user1].keys.each do |user2|
-          if !prolific_user_hash[user2]
-            network_hash[user1].delete(user2)
-          end
-        end
+  end
+  return delete_empty_hashes(network_hash)
+end
+
+def reciprocity_prune(network_hash)
+  network_hash.keys.each do |user1|
+    network_hash[user1].keys.each do |user2|
+      if !network_hash[user2] or !network_hash[user2][user1]
+        network_hash[user1].delete(user2)
       end
     end
   end
@@ -184,33 +196,58 @@ def get_window_coordinates
   users = UsersStore.new()
   coordinates_hash[:pajek] = {}
   coordinates_hash[:gexf] = {}
+  coordinates_hash[:graphml] = {}
   users.each do |user|
     coordinates = COORDINATES[user[:peak_window]]
     coordinates_hash[:pajek][user[:name]] = [coordinates[0] * 0.49 + 0.5, coordinates[1] * 0.49 + 0.5]
     coordinates_hash[:gexf][user[:name]] = [coordinates[0] * 1000, coordinates[1] * 1000]
-    coordinates_hash[:graphml][user[:name]] = [coordinates[0] * 1980 + 2000, coordinates[1] * 1980 + 2000]
+    coordinates_hash[:graphml][user[:name]] = [coordinates[0] * 4950 + 5000, coordinates[1] * 4950 + 5000]
   end
   return coordinates_hash
 end
 
 def save_network(file_infix, network_hash, options = {})
-  options_string = "U#{options[:undirected].to_s}Icut#{options[:interaction_cutoff].to_s}" +
-      "Mfront#{options[:max_hours_on_frontpage].to_s}Speak#{options[:only_single_peak].to_s}"
-  if options[:window]
-    ForumTools::File.save_networks("W#{options[:window].to_s}#{options_string}_#{file_infix}", network_hash, options)
+  if options[:interaction_cutoff]
+    cut = "interaction_" + options[:interaction_cutoff].to_s
+  elsif options[:reciprocity_cutoff]
+    cut = "reciprocity_" + options[:reciprocity_cutoff].to_s
+  elsif options[:prolific_cutoff]
+    cut = "prolific_" + options[:prolific_cutoff].to_s
   else
-    ForumTools::File.save_networks("All#{options_string}_#{file_infix}", network_hash, options)
+    cut = "false"
   end
+  options_string = "cut_#{cut}.max_fr_#{options[:max_hours_on_frontpage].to_s}." +
+      "singl_pk_#{options[:only_single_peak].to_s}.undr_#{options[:undirected].to_s}"
+  if options[:window]
+    ForumTools::File.save_networks("wnd_#{options[:window].to_s}#{options_string}_#{file_infix}", network_hash, options)
+  else
+    ForumTools::File.save_networks("all_#{options_string}_#{file_infix}", network_hash, options)
+  end
+end
+
+def reduce(network_hash, options = {})
+  if options[:interaction_cutoff]
+    if options[:undirected] # undirected before cutoff
+      network_hash = undirect(network_hash) 
+    end
+    network_hash = cutoff_prune(network_hash, options[:interaction_cutoff])
+  elsif options[:reciprocity_cutoff]
+    network_hash = cutoff_prune(network_hash, options[:reciprocity_cutoff])
+    network_hash = reciprocity_prune(network_hash)
+  elsif options[:prolific_cutoff]
+    network_hash = prolific_cutoff(network_hash)
+  end
+  if options[:undirected]
+    network_hash = undirect(network_hash) unless options[:interaction_cutoff]
+  end
+  return network_hash
 end
 
 def do_replies(options = {})
   replies = reply_list(options)
   replies_network = network_hash(replies, options)
-  if options[:undirected]
-    replies_network = undirect(replies_network)
-  end
-  pruned_replies_network = prune(replies_network, options)
-  save_network("replies", pruned_replies_network, options)
+  reduced_replies_network = reduce(replies_network, options)
+  save_network("replies", reduced_replies_network, options)
 end
 
 def do_shareds(options = {})
@@ -218,8 +255,8 @@ def do_shareds(options = {})
   options[:undirected] = true
   shareds = shared_thread_list(options)
   shareds_network = network_hash(shareds, options)
-  pruned_shareds_network = prune(shareds_network, options)
-  save_network("shareds", pruned_shareds_network, options)
+  reduced_shareds_network = reduce(shareds_network, options)
+  save_network("shareds", reduced_shareds_network, options)
 end
 
 overall_options = {}
@@ -237,9 +274,11 @@ initialize_environment(args)
 
 overall_options.merge!(
     :interaction_cutoff => ForumTools::CONFIG[:interaction_cutoff],
+    :reciprocity_cutoff => ForumTools::CONFIG[:reciprocity_cutoff],
+    :prolific_cutoff => (ForumTools::CONFIG[:use_prolific_cutoff] ? ForumTools::CONFIG[:prolific_cutoff] : false),
     :max_hours_on_frontpage => ForumTools::CONFIG[:max_hours_on_frontpage],
     :only_single_peak => ForumTools::CONFIG[:only_single_peak],
-    :undirected => true
+    :undirected => ForumTools::CONFIG[:undirected]
 )
 
 if overall_options[:window]

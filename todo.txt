@@ -1,20 +1,12 @@
 Data preparation
-- Support graphml
-- Consider random selection from network
-- Reciprocity, hunt for time effects
-- Test circadian difference
-- Fix weights in Giph
 - Distance measures
   - time distance between posts in thread without thread
-  - social distance of users (in reply & user-to-thread networks)
+  - social distance of users (in reply & user-to-thread networks) 
+    as edgelist
 - Proportion that interacts within window / window distance
-- Prettify color coding and legenda
-- Store networks in var
 
 Clusters
 - Cluster-spotting, see if time-related
-- Cluster-coeffs for whole vs parts
-  - also corrected for varying network-sizes
 - Degrees of reciprocity
 - Find way of pruning networks to k-components or random
 
@@ -40,6 +32,8 @@ Bonus
 - Best time to post, karma?
   - karma with time & with depth
 - Video of network as changes
+  - Add time-stamps
+- Prettify color coding and legenda
 
 Not at all
 - karma difference
@@ -53,6 +47,8 @@ Not at all
 - Threads only briefly on homepage
   - Low rated
   - Small
+- Cluster-coeffs for whole vs parts
+  - also corrected for varying network-sizes
 
 ## Old
 

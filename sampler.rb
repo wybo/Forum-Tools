@@ -32,7 +32,7 @@ def sample(options = {})
   return list
 end
 
-def midweek_sample(options = {})
+def days_sample(options = {})
   puts "# Selecting files"
   list = []
   file_names = Dir.glob(ForumTools::CONFIG[:production_dir] +
@@ -71,7 +71,7 @@ end
 args = ARGV.to_a
 if args[0] == "midweek" # also env
   initialize_environment(args)
-  list = midweek_sample(ForumTools::CONFIG[:samples][ForumTools::CONFIG[:environment].to_sym])
+  list = days_sample(ForumTools::CONFIG[:samples][ForumTools::CONFIG[:environment].to_sym])
   populate(list, ForumTools::CONFIG[:yaml_dir])
 else
   initialize_environment(args)

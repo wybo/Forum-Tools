@@ -22,9 +22,12 @@ def initialize_environment(args)
 
   # Minimum number of posts required if in prolific category
   ForumTools.config(:prolific_cutoff => (ForumTools::CONFIG[:environment] == "test" ? 3 : 25))
+  ForumTools.config(:use_prolific_cutoff => false)
   ForumTools.config(:interaction_cutoff => (ForumTools::CONFIG[:environment] == "test" ? 2 : 7))
-  ForumTools.config(:max_hours_on_frontpage => 8)
+#  ForumTools.config(:reciprocity_cutoff => (ForumTools::CONFIG[:environment] == "test" ? 2 : 4))
+  ForumTools.config(:max_hours_on_frontpage => 12)
   ForumTools.config(:only_single_peak => false)
+  ForumTools.config(:undirected => true)
 
   # Overall root
   ForumTools.config(:root_dir => "/home/wybo/projects/hnscraper/")

@@ -180,10 +180,8 @@ EOS
         network_hash[user1].keys.sort.each do |user2|
           weight = network_hash[user1][user2]
             chunks << <<-EOS
-      <edge id="#{i.to_s}" source="#{users_hash[user1]}" target="#{users_hash[user2]}">
-        <attvalues>
-          <attvalue for="weight" value="#{weight}"/>
-        </attvalues>
+      <edge id="#{i.to_s}" source="#{users_hash[user1]}" target="#{users_hash[user2]}" weight="#{weight}">
+        <attvalues></attvalues>
       </edge>
 EOS
           i += 1
@@ -241,10 +239,8 @@ EOS
   <key id="E-Label Font Size" for="edge" attr.name="Label Font Size" attr.type="string" />
   <key id="E-ID" for="edge" attr.name="ID" attr.type="string" />
   <key id="E-Dynamic Filter" for="edge" attr.name="Dynamic Filter" attr.type="string" />
-  <key id="E-Dynamic Filter" for="edge" attr.name="Dynamic Filter" attr.type="string" />
   <key id="E-Add Your Own Columns Here" for="edge" attr.name="Add Your Own Columns Here" attr.type="string" />
   <key id="E-Edge Weight" for="edge" attr.name="Edge Weight" attr.type="string" />
-  <graph edgedefault="undirected">
   <graph edgedefault="#{(options[:undirected] ? "undirected" : "directed")}">
 EOS
       users = self.get_unique_users(network_hash)
@@ -259,14 +255,13 @@ EOS
           colors = options[:colors][:gexf][user]
           chunks << <<-EOS
       <data key="V-Color">#{colors[0]}; #{colors[1]}; #{colors[2]}</data>
-      <data key="V-Opacity">0.8</data>
 EOS
         end
         if options[:coordinates]
           coordinates = options[:coordinates][:graphml][user]
           chunks << <<-EOS
-      <data key="V-X">#{sprintf("%.4f", coordinates[0])}</data>
-      <data key="V-Y">#{sprintf("%.4f", coordinates[1])}</data>
+      <data key="V-X">#{sprintf("%.1f", coordinates[0])}</data>
+      <data key="V-Y">#{sprintf("%.1f", coordinates[1])}</data>
 EOS
         end
         chunks << <<-EOS
@@ -281,9 +276,11 @@ EOS
             chunks << <<-EOS
       <edge source="#{users_hash[user1]}" target="#{users_hash[user2]}">
         <data key="E-ID">#{i}</data>
-        <data key="E-Edge Weight">#{weight.to_s}</data>
+        <data key="E-Width">#{weight}</data>
+        <data key="E-Opacity">40</data>
       </edge>
 EOS
+        #<data key="E-Edge Weight">#{weight.to_s}</data>
           i += 1
         end
       end
