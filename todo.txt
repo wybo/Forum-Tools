@@ -1,8 +1,4 @@
 Data preparation
-- Distance measures
-  - time distance between posts in thread without thread
-  - social distance of users (in reply & user-to-thread networks) 
-    as edgelist
 - Proportion that interacts within window / window distance
 
 Clusters
@@ -34,12 +30,13 @@ Bonus
 - Video of network as changes
   - Add time-stamps
 - Prettify color coding and legenda
+- Geo & time-locate users + spatial distance
+  - spatial distance
 
 Not at all
 - karma difference
 - join time distance
-- Geo & time-locate users + spatial distance
-  - spatial distance
+- time distance between posts in thread without thread
 - Time-series
   - Posts with timezone times overlayed
 - thread distance

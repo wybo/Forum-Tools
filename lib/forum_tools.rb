@@ -334,5 +334,11 @@ EOS
         return env_dir + CONFIG[:yaml_dir] + file_name
       end
     end
+
+    class PajekFiles
+      def self.all
+        return Dir.glob(CONFIG[:env_dir] + CONFIG[:net_dir] + "*.net")
+      end
+    end
   end
 end

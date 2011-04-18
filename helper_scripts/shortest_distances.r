@@ -14,5 +14,6 @@ require(igraph, quietly=TRUE)
 require(MASS, quietly=TRUE)
 
 netw = read.graph(file_name, format="pajek")
+netw = remove.edge.attribute(netw, "weight")
 matr = shortest.paths(netw)
 write.matrix(matr)

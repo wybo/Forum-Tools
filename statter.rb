@@ -167,7 +167,20 @@ def measures
       ["time"].concat(median_circadian_distance_between_users_posts))
   end
 
-  puts "Distance between each user in network"
+  puts "Distance between each user in networks"
+  ForumTools::File::PajekFiles.all.each do |network_file|
+    reply_distance_between_users = []
+    matrix = `helper_scripts/shortest_distances.r #{network_file}`
+    rows = matrix.split("\n")
+    rows.collect! { |r| r.strip.squeeze(" ").split(" ") }
+    rows.each do |cells|
+      cells.each do |cell|
+        reply_distance_between_users << cell
+      end
+    end
+    ForumTools::File.save_stat("reply_distance_between_users.#{File.basename(network_file, ".net")}",
+        ["distance"].concat(reply_distance_between_users))
+  end
 end
 
 ### Helper methods
