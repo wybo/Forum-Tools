@@ -67,8 +67,15 @@ class ForumTools
       end
     end
 
-    def self.save_stat(file_prefix, array)
-      file_name = self.set_extension(file_prefix, ".dat")
+    def self.save_stat(file_prefix, array, options = {})
+      file_name = self.set_extension(file_prefix, ".raw")
+      if options[:add_case_numbers]
+        if array[0].kind_of?(Array)
+          array.insert(0,["case"].concat((array[0].size - 1).times.to_a))
+        else
+          array = [["case"].concat((array.size - 1).times.to_a), array]
+        end
+      end
       if array[0].kind_of?(Array)
         rows = []
         columns = array
@@ -98,6 +105,7 @@ class ForumTools
       self.save_pajek(file_prefix, network_hash, options)
       self.save_gexf(file_prefix, network_hash, options)
       self.save_graphml(file_prefix, network_hash, options)
+      NetworkStore.new(file_prefix, :hash => network_hash).save
     end
 
     def self.save_pajek(file_prefix, network_hash, options = {})
@@ -182,6 +190,14 @@ EOS
             chunks << <<-EOS
       <edge id="#{i.to_s}" source="#{users_hash[user1]}" target="#{users_hash[user2]}" weight="#{weight}">
         <attvalues></attvalues>
+EOS
+        if options[:edge_colors]
+          colors = options[:edge_colors][:gexf][user1][user2]
+          chunks << <<-EOS
+        <viz:color r="#{colors[0]}" g="#{colors[1]}" b="#{colors[2]}" a="0.8"></viz:color>
+EOS
+        end
+      chunks << <<-EOS
       </edge>
 EOS
           i += 1
@@ -276,6 +292,14 @@ EOS
             chunks << <<-EOS
       <edge source="#{users_hash[user1]}" target="#{users_hash[user2]}">
         <data key="E-ID">#{i}</data>
+EOS
+            if options[:edge_colors]
+              colors = options[:edge_colors][:gexf][user1][user2]
+              chunks << <<-EOS
+        <data key="E-Color">#{colors[0]}; #{colors[1]}; #{colors[2]}</data>
+EOS
+        end
+            chunks << <<-EOS
         <data key="E-Width">#{weight}</data>
         <data key="E-Opacity">40</data>
       </edge>
@@ -332,12 +356,6 @@ EOS
         return env_dir + CONFIG[:var_dir] + file_name
       else
         return env_dir + CONFIG[:yaml_dir] + file_name
-      end
-    end
-
-    class PajekFiles
-      def self.all
-        return Dir.glob(CONFIG[:env_dir] + CONFIG[:net_dir] + "*.net")
       end
     end
   end

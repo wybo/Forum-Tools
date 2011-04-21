@@ -6,11 +6,11 @@ class TimeTools
   CONFIG[:data_start_time] = Time.gm(2011, "feb", 1)
 
   WINDOWS = []
+  WINDOWS << [23, 0, 1]
   (0..21).each do |i|
     WINDOWS << [i, i + 1, i + 2]
   end
   WINDOWS << [22, 23, 0]
-  WINDOWS << [23, 0, 1]
 
   HALF_DAY = 12.hours.to_i
 
@@ -23,14 +23,30 @@ class TimeTools
     end
   end
 
-  def self.window(time)
+  def self.windows(time)
     hour = TimeTools.hour(time)
-    return WINDOWS[hour - 2] # as windows translate back 3 - 2 = 1 => [1,2,3]
+    return WINDOWS[hour] # real in middle 1 => [0,1,2]
+  end
+
+  def self.peak_window(times)
+    window_counts = self.per_period_adder(times, "windows")
+    max = window_counts.max
+    index = window_counts.index(max)
+    if index < 23
+      middle_index = index + 1
+    else # 11.. ..1
+      middle_index = 0
+    end
+    if window_counts[middle_index] == max
+      return middle_index
+    else
+      return index
+    end
   end
 
   def self.per_period_adder(times, period_string)
     x_for_each_y = []
-    if period_string == "hour" or period_string == "window" # needed for hour alignments
+    if period_string == "hour" or period_string == "windows" # needed for hour alignments
       24.times do |i|
         x_for_each_y[i] = 0
       end
@@ -68,20 +84,20 @@ class TimeTools
   end
 
   def self.hour(time)
-    return Time.at(time).hour
+    return Time.at(time).utc.hour
   end
 
   def self.second_of_day(time)
-    time = Time.at(time)
-    return time - Time.utc(time.year, time.month, time.day).to_i
+    time_obj = Time.at(time).utc
+    return time - Time.utc(time_obj.year, time_obj.month, time_obj.day).to_i
   end
 
   def self.day(time)
-    return Time.at(time).yday - TimeTools::CONFIG[:data_start_time].yday
+    return Time.at(time).utc.yday - TimeTools::CONFIG[:data_start_time].yday
   end
 
   def self.circadian_difference(difference)
-    difference = difference.abs
+    difference = difference.abs.to_i
     if difference > HALF_DAY
       return difference - (difference - HALF_DAY) * 2
     else

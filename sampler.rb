@@ -21,7 +21,7 @@ def sample(options = {})
   file_names = Dir.glob(ForumTools::CONFIG[:production_dir] +
       ForumTools::CONFIG[:raw_dir] + "*")
   file_names.each do |file_name|
-    time = Time.at(ForumTools::File.parse_file_time(file_name))
+    time = Time.at(ForumTools::File.parse_file_time(file_name)).utc
     base_name = File.basename(file_name)
     if (time > start_time and time < end_time) or 
         (ForumTools::CONFIG[:environment] != "test" and base_name =~ /^user_/)
@@ -44,7 +44,7 @@ def days_sample(options = {})
     else
       thread = ThreadStore.new(:file_name => base_name, 
           :env_dir => ForumTools::CONFIG[:production_dir])
-      time = Time.at(thread[0][:time])
+      time = Time.at(thread[0][:time]).utc
       if (options[:days].include?(time.wday))
         list << base_name
       end

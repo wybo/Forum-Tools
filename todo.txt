@@ -1,9 +1,16 @@
 Data preparation
-- Proportion that interacts within window / window distance
+- Fix errors
+- Directed, times of interaction between users colors arc
+- Redo clusters
+- Weed out non-principle component view map if better
+- Nr of closed triads
+- List of threads and lenght of time on homepage
+- Weight posts relative to nr of posts in window
+- Collapse to circle network, added up links
+- Distance (width) in the thread vs abs time distance
 
 Clusters
-- Cluster-spotting, see if time-related
-- Degrees of reciprocity
+- Cluster-spotting, see if time-related, in NodeXL
 - Find way of pruning networks to k-components or random
 
 Regression on social distance versus
@@ -46,6 +53,7 @@ Not at all
   - Small
 - Cluster-coeffs for whole vs parts
   - also corrected for varying network-sizes
+- Proportion that interacts within window / window distance
 
 ## Old
 

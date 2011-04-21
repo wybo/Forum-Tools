@@ -124,10 +124,10 @@ def parse_users
       times_for_each_user_hash[post[:user]] << post[:time]
     end
   end
-  posts_per_window_for_each_user = {}
+  peak_window_for_each_user = {}
   posts_per_hour_for_each_user = {}
   times_for_each_user_hash.each_pair do |user, times|
-    posts_per_window_for_each_user[user] = TimeTools.per_period_adder(times, "window")
+    peak_window_for_each_user[user] = TimeTools.peak_window(times)
     posts_per_hour_for_each_user[user] = TimeTools.per_period_adder(times, "hour")
   end
   other_for_each_user_hash = {}
@@ -139,8 +139,7 @@ def parse_users
   store_for_each_user_hash = store.hash
   store.clear()
   times_for_each_user_hash.each_pair do |name, times|
-    window_counts = posts_per_window_for_each_user[name]
-    peak_window = window_counts.index(window_counts.max)
+    peak_window = peak_window_for_each_user[name]
     if other_for_each_user_hash[name]
       user = other_for_each_user_hash[name]
     elsif store_for_each_user_hash[name]

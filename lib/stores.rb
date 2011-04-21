@@ -28,6 +28,33 @@ class Store < OpenStructArray
   end
 end
 
+class HashStore < Hash
+  def initialize(file_name, options = {})
+    @file_name = file_name
+    @yaml_options = options
+    if options[:hash]
+      self.items = options[:hash]
+    else
+      self.items = ForumTools::File.read_yaml(@file_name, @yaml_options)
+    end
+    return self
+  end
+
+  def items=(hash)
+    hash.keys.each do |key|
+      self[key] = hash[key]
+    end
+  end
+
+  def save
+    ForumTools::File.save_yaml(@file_name, self, @yaml_options)
+  end
+
+  def delete
+    ForumTools::File.delete_yaml(@file_name, @yaml_options)
+  end
+end
+
 class ThreadStore < Store
   def self.all
     return Store.all(ThreadStore, "thread*")
@@ -190,10 +217,11 @@ class UsersStore < Store
     return hash
   end
 
-  def prolific
+  def prolificity(prolific)
     array = []
     self.each do |user|
-      if user[:posts] >= ForumTools::CONFIG[:prolific_cutoff]
+      if (prolific and user[:posts] >= ForumTools::CONFIG[:prolific_cutoff]) or
+          (!prolific and user[:posts] <= ForumTools::CONFIG[:unprolific_cutdown])
         array << user
       end
     end
@@ -201,8 +229,16 @@ class UsersStore < Store
   end
 
   def prolific_hash
+    return self.prolificity_hash(true)
+  end
+
+  def unprolific_hash
+    return self.prolificity_hash(false)
+  end
+
+  def prolificity_hash(prolific)
     hash = {}
-    self.prolific.each do |user|
+    self.prolificity(prolific).each do |user|
       hash[user[:name]] = 1
     end
     return hash
@@ -211,5 +247,32 @@ class UsersStore < Store
   def to_yaml
     self.sort! {|a,b| a[:name] <=> b[:name]}
     super
+  end
+end
+
+class NetworkStore < HashStore
+  def self.all_pajek_file_names
+    return Dir.glob(ForumTools::CONFIG[:env_dir] + ForumTools::CONFIG[:net_dir] + "*.net")
+  end
+
+  def initialize(file_name, options = {})  
+    super((File.basename(file_name, ".net") + ".yaml"), options.merge(:var => true))
+  end
+
+  def users
+    users = []
+    self.keys.each do |key1|
+      users << key1
+      self[key1].keys.each do |key2|
+        users << key2
+      end
+    end
+    return users.sort.uniq
+  end
+end
+
+class TimeDifferencesStore < HashStore
+  def initialize
+    super("time_distances", :var => true)
   end
 end
