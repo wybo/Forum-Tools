@@ -39,13 +39,12 @@ def days_sample(options = {})
       ForumTools::CONFIG[:yaml_dir] + "*")
   file_names.each do |file_name|
     base_name = File.basename(file_name)
-    if base_name == "users.yaml"
-      list << base_name
-    else
+    if base_name !~ /^user/
       thread = ThreadStore.new(:file_name => base_name, 
           :env_dir => ForumTools::CONFIG[:production_dir])
       time = Time.at(thread[0][:time]).utc
-      if (options[:days].include?(time.wday))
+      if (options[:days].include?(time.wday) and 
+          (!options[:end_time] or time < options[:end_time]))
         list << base_name
       end
     end
@@ -69,7 +68,7 @@ def populate(list, raw_yaml)
 end
 
 args = ARGV.to_a
-if args[0] == "midweek" # also env
+if args[0] == "midweek" or args[0] == "standard" # also env
   initialize_environment(args)
   list = days_sample(ForumTools::CONFIG[:samples][ForumTools::CONFIG[:environment].to_sym])
   populate(list, ForumTools::CONFIG[:yaml_dir])

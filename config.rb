@@ -17,7 +17,8 @@ def initialize_environment(args)
   ForumTools.config(:samples => {
       :test => {:start_time => Time.utc(2011,"feb",2), :end_time => Time.utc(2011,"feb",4)},
       :febmar => {:end_time => Time.utc(2011,"apr",2)},
-      :midweek => {:days => [2,3]}
+      :midweek => {:days => [2,3]},
+      :standard => {:days => [2,3], :end_time => Time.utc(2011,"mar",12)}
   })
 
   # Minimum number of posts required if in prolific category
@@ -26,12 +27,12 @@ def initialize_environment(args)
   ForumTools.config(:unprolific_cutdown => (ForumTools::CONFIG[:environment] == "test" ? 2 : 5))
   #ForumTools.config(:prolificity_prune => :unprolific)
   ForumTools.config(:prolificity_prune => false)
-#  ForumTools.config(:interaction_cutoff => (ForumTools::CONFIG[:environment] == "test" ? 2 : 5))
-  ForumTools.config(:reciprocity_cutoff => (ForumTools::CONFIG[:environment] == "test" ? 2 : 2))
+  ForumTools.config(:interaction_cutoff => (ForumTools::CONFIG[:environment] == "test" ? 2 : 2))
+#  ForumTools.config(:reciprocity_cutoff => (ForumTools::CONFIG[:environment] == "test" ? 2 : 2))
   ForumTools.config(:max_hours_on_frontpage => 12)
   ForumTools.config(:only_single_peak => false)
   ForumTools.config(:undirected => true)
-  ForumTools.config(:hop_cutoff => 5)
+  ForumTools.config(:hop_cutoff => 5) # for regression
 
   # Overall root
   ForumTools.config(:root_dir => "/home/wybo/projects/hnscraper/")
@@ -51,6 +52,9 @@ def initialize_environment(args)
   ForumTools.config(:yaml_dir => ForumTools::CONFIG[:data_dir] + "yaml/")
   ForumTools.config(:net_dir => ForumTools::CONFIG[:data_dir] + "net/")
   ForumTools.config(:stat_dir => ForumTools::CONFIG[:data_dir] + "stat/")
+
+  # For yaml.js, importing into agent-based-forum
+  ForumTools.config(:abf_dir => "/home/wybo/projects/agent-based-forum/trunk/")
 
   # Make sure directories are created
   ForumTools::File.init_dirs()

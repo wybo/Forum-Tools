@@ -1,20 +1,13 @@
 Data preparation
-- Fix errors
 - Directed, times of interaction between users colors arc
-- Redo clusters
-- Weed out non-principle component view map if better
-- Nr of closed triads
 - List of threads and lenght of time on homepage
-- Weight posts relative to nr of posts in window
-- Collapse to circle network, added up links
-- Distance (width) in the thread vs abs time distance
+- Line plot of 16 overlayed single-peak and 16 multi-peak
+- See MM
 
 Clusters
-- Cluster-spotting, see if time-related, in NodeXL
-- Find way of pruning networks to k-components or random
-
-Regression on social distance versus
-- time distance
+- Reciprocity inside and outside of windows
+- Directed small plot with bended arrows, see if diff
+- See MM
 
 ## Info
 
@@ -32,28 +25,38 @@ non-independence
 ## Cut
 
 Bonus
-- Best time to post, karma?
-  - karma with time & with depth
+- Geo-code users, create graph of overlayed
+  - Posts with timezone times overlayed
 - Video of network as changes
   - Add time-stamps
 - Prettify color coding and legenda
-- Geo & time-locate users + spatial distance
-  - spatial distance
+  - fix opacity
+  - bars in stata
+- Regression
+  - weekend vs weekday difference in time effect
+  - time-zone shift US vs UK distance
+  - weed out non-principle component for regressions
+- Proportion that interacts within window / window distance
+- Degree and betweenness centrality scatter plot
+
+Blog post
+- Best time to post, karma?
+  - karma with time & with depth
 
 Not at all
-- karma difference
-- join time distance
-- time distance between posts in thread without thread
-- Time-series
-  - Posts with timezone times overlayed
-- thread distance
-- avg/median thread distance of users posts (transitive min is netw)
+- Fix gaps
+- Weight posts relative to nr of posts in window
+- Unprolific and prolific posts per hour
+- Regression
+  - karma difference
+  - join time distance
+- Thread distance
+  - avg/median thread distance of users posts (transitive min is netw)
 - Threads only briefly on homepage
   - Low rated
   - Small
 - Cluster-coeffs for whole vs parts
   - also corrected for varying network-sizes
-- Proportion that interacts within window / window distance
 
 ## Old
 

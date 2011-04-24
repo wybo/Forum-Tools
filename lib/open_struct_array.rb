@@ -1,3 +1,5 @@
+require 'json'
+
 class OpenStructArray < Array
   def self.all(class_const, glob_dir_file_name)
     file_names = Dir.glob(glob_dir_file_name)
@@ -33,6 +35,10 @@ class OpenStructArray < Array
 
   def to_yaml
     self.to_hash.to_yaml
+  end
+
+  def to_json
+    self.to_hash.to_json
   end
 
   def clear_array

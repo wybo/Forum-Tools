@@ -4,6 +4,11 @@ require 'parsers'
 require 'stores'
 require 'time_tools'
 
+COORDINATES = []
+24.times do |i|
+  COORDINATES << [Math.cos(Math::PI / 12 * (i - 6)), Math.sin(Math::PI / 12 * (i + 6))]
+end
+
 puts '### Extracting directed network'
 
 def reply_list(options = {})
@@ -247,38 +252,13 @@ def edge_windows(network_hash, options = {})
   return edge_times # edge_windows by now
 end
 
-PAJEK_COLORS = ["GreenYellow", "Yellow", "YellowOrange", "Orange", "RedOrange", "Red", 
-          "OrangeRed", "Magenta", "Lavender", "Thistle", "Purple", "Violet",
-          "Blue", "NavyBlue", "CadetBlue", "MidnightBlue", "Cyan", "Turquose",
-          "BlueGreen", "Emerald", "SeaGreen", "Green", "PineGreen", "YellowGreen"]
-
-WHEEL_PART_PART = []
-4.times do |i|
-  WHEEL_PART_PART << (255 / 4.0).ceil * i
-end
-8.times do
-  WHEEL_PART_PART << 255
-end
-4.times do |i|
-  WHEEL_PART_PART << 255 - (255 / 4.0).ceil * i
-end
-8.times do
-  WHEEL_PART_PART << 0
-end
-WHEEL_PART = WHEEL_PART_PART.concat(WHEEL_PART_PART)
-WHEEL_COLORS = []
-24.times do |i|
-  WHEEL_COLORS << [WHEEL_PART[i + 8], WHEEL_PART[i], WHEEL_PART[i - 8]]
-end
-
 def get_window_colors
   colors_hash = {}
   colors_hash[:pajek] = {}
   colors_hash[:gexf] = {}
-  WHEEL_COLORS.size.times do |i|
-    colors_hash[:pajek][i] = ["ic", PAJEK_COLORS[i], 
-        "bc", PAJEK_COLORS[i]]
-    colors_hash[:gexf][i] = WHEEL_COLORS[i]
+  TimeTools::WHEEL_COLORS.size.times do |i|
+    colors_hash[:pajek][i] = TimeTools.pajek_color_window(i)
+    colors_hash[:gexf][i] = TimeTools.wheel_color_window(i) 
   end
   return colors_hash
 end
@@ -289,9 +269,14 @@ def get_user_colors
   colors_hash[:gexf] = {}
   users = UsersStore.new()
   users.each do |user|
-    colors_hash[:pajek][user[:name]] = ["ic", PAJEK_COLORS[user[:peak_window]], 
-        "bc", PAJEK_COLORS[user[:peak_window]]]
-    colors_hash[:gexf][user[:name]] = WHEEL_COLORS[user[:peak_window]]
+    if user[:single_peak]
+      colors_hash[:pajek][user[:name]] = TimeTools.pajek_color_window(user[:peak_window])
+      colors_hash[:gexf][user[:name]] = TimeTools.wheel_color_window[user[:peak_window]]
+    else
+      colors_hash[:pajek][user[:name]] = ["ic", TimeTools::PAJEK_NO_SINGLE_PEAK, 
+          "bc", TimeTools::PAJEK_NO_SINGLE_PEAK]
+      colors_hash[:gexf][user[:name]] = TimeTools::WHEEL_NO_SINGLE_PEAK
+    end
   end
   return colors_hash
 end
@@ -317,11 +302,6 @@ def get_edge_colors(network_hash, options = {})
     end
   end
   return colors_hash
-end
-
-COORDINATES = []
-24.times do |i|
-  COORDINATES << [Math.cos(Math::PI / 12 * (i - 6)), Math.sin(Math::PI / 12 * (i + 6))]
 end
 
 def get_window_coordinates

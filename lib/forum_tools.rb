@@ -3,6 +3,7 @@ require 'net/http'
 require 'open-uri'
 require 'fileutils'
 require 'yaml'
+require 'json'
 
 class ForumTools
   CONFIG = {} 
@@ -65,6 +66,12 @@ class ForumTools
       if ::File.exists?(dir_file_name)
         ::File.delete(dir_file_name)
       end
+    end
+
+    def self.save_json(file_prefix, structure, options = {})
+      json_str = "var yaml_thread = eval('(" + structure.to_json + ")');"
+      open(self.json_dir_file_name(file_prefix, options), "w") { |file| 
+          file.write(json_str) }
     end
 
     def self.save_stat(file_prefix, array, options = {})
@@ -343,6 +350,11 @@ EOS
 
     def self.set_extension(file_prefix, extension)
       return ::File.basename(file_prefix, extension) + extension
+    end
+
+    def self.json_dir_file_name(file_prefix, options)
+      file_name = self.set_extension(file_prefix, ".json.js")
+      return CONFIG[:abf_dir] + file_name
     end
 
     def self.yaml_dir_file_name(file_prefix, options)

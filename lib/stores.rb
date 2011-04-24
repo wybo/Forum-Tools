@@ -76,11 +76,19 @@ class ThreadStore < Store
       super(options)
     elsif options.kind_of?(Hash)
       super(options[:file_name], options)
+      if options[:array]
+        self.clear()
+        self.items = options[:array]
+      end
     elsif options.kind_of?(Integer)
       super("thread_" + options.to_s)
     else
       raise 'Invalid options: ' + options.inspect
     end
+  end
+
+  def save_json
+    ForumTools::File.save_json(@file_name, self)
   end
 end
 
@@ -157,10 +165,8 @@ class TimesStore < Store
   def initialize(options = {})
     super("times", :var => true)
     if options[:array]
-      clear()
-      options[:array].each do |item|
-        self << item
-      end
+      self.clear()
+      self.items = options[:array]
     end
   end
 
