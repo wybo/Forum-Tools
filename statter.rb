@@ -240,7 +240,7 @@ def distances(options = {})
                   differences << TimeTools.circadian_difference(time1 - time2)
                 end
               end
-              differences_store[user1[:name]][user2[:name]] = calculate_median(differences)
+              differences_store[user1[:name]][user2[:name]] = TimeTools.median(differences)
             end
             median_circadian_distance_between_users_posts << differences_store[user1[:name]][user2[:name]]
             reply_distance_between_users << reply_distance_between_users_hash[user1[:name]][user2[:name]]
@@ -268,17 +268,6 @@ def columnize_users_hash(user_hash)
     columns << [user].concat(user_hash[user])
   end
   return columns
-end
-
-def calculate_median(array)
-  array.sort!
-  mid = (array.length - 1) / 2
-  if array.length % 2 == 0
-    mid2 = (array.length) / 2
-    return ((array[mid] + array[mid2]) / 2.0).to_i
-  else
-    return array[mid]
-  end
 end
 
 def sample(array, size)

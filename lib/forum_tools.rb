@@ -69,7 +69,12 @@ class ForumTools
     end
 
     def self.save_json(file_prefix, structure, options = {})
-      json_str = "var yaml_thread = eval('(" + structure.to_json + ")');"
+      if options[:variable]
+        variable = options[:variable]
+      else
+        variable = "thread"
+      end
+      json_str = "var #{variable} = eval('(" + structure.to_json + ")');"
       open(self.json_dir_file_name(file_prefix, options), "w") { |file| 
           file.write(json_str) }
     end

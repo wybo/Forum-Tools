@@ -271,7 +271,7 @@ def get_user_colors
   users.each do |user|
     if user[:single_peak]
       colors_hash[:pajek][user[:name]] = TimeTools.pajek_color_window(user[:peak_window])
-      colors_hash[:gexf][user[:name]] = TimeTools.wheel_color_window[user[:peak_window]]
+      colors_hash[:gexf][user[:name]] = TimeTools.wheel_color_window(user[:peak_window])
     else
       colors_hash[:pajek][user[:name]] = ["ic", TimeTools::PAJEK_NO_SINGLE_PEAK, 
           "bc", TimeTools::PAJEK_NO_SINGLE_PEAK]
@@ -293,12 +293,11 @@ def get_edge_colors(network_hash, options = {})
       if !colors_hash[:pajek][user1]
         colors_hash[:pajek][user1] = {}
       end
-      colors_hash[:pajek][user1][user2] = ["ic", PAJEK_COLORS[peak_window], 
-          "bc", PAJEK_COLORS[peak_window]]
+      colors_hash[:pajek][user1][user2] = TimeTools.pajek_color_window(peak_window)
       if !colors_hash[:gexf][user1]
         colors_hash[:gexf][user1] = {}
       end
-      colors_hash[:gexf][user1][user2] = WHEEL_COLORS[peak_window]
+      colors_hash[:gexf][user1][user2] = TimeTools.wheel_color_window(peak_window)
     end
   end
   return colors_hash

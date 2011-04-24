@@ -87,8 +87,8 @@ class ThreadStore < Store
     end
   end
 
-  def save_json
-    ForumTools::File.save_json(@file_name, self)
+  def save_json(options = {})
+    ForumTools::File.save_json(@file_name, self, options)
   end
 end
 

@@ -6,10 +6,9 @@ require 'time_tools'
 
 puts '### Extracting directed network'
 
-def thread_matrix(options = {})
+def thread_matrix(threads, options = {})
   puts '# Assembling thread matrix'
   thread_matrix = []
-  threads = get_threads(options)
   threads.each do |thread|
     i = 0
     start_time = thread[0][:time]
@@ -20,7 +19,11 @@ def thread_matrix(options = {})
       if !thread_matrix[i][post[:indent]] 
         thread_matrix[i][post[:indent]] = []
       end
-      thread_matrix[i][post[:indent]] << post[:time] - start_time
+      if options[:collect] == :time
+        thread_matrix[i][post[:indent]] << post[:time] - start_time
+      else
+        thread_matrix[i][post[:indent]] << post[:rating]
+      end
       i += 1
     end
   end
@@ -29,20 +32,51 @@ end
 
 def prune_matrix(matrix, options = {})
   puts '# Pruning thread matrix'
+  matrix.collect! {|row|
+    row.collect! {|cell|
+      if cell and cell.size >= 5 # array
+        cell
+      else
+        nil
+      end
+    }
+  }
   return matrix
 end
 
 def summarize_matrix(matrix, options = {})
   puts '# Summarizing matrix'
+  values = []
   matrix.collect! {|row|
     row.collect! {|cell|
       if cell
-        cell = TimeTools.peak_window(cell) # array of times
-      else
-        cell = nil
+        if options[:collect] == :time
+          cell = TimeTools.peak_window(cell) # array of times
+   #       cell = TimeTools.median(cell) # array of times
+        else
+          cell = TimeTools.average(cell) # array of rating scores
+        end
+        values << cell
       end
+      cell
     }
   }
+  values.sort!
+  jump = values.size / 24.0
+  if options[:collect] == :rating
+    matrix.collect! {|row|
+      row.collect! {|cell|
+        if cell
+          i = 0
+          while i < 23 and cell > values[(i * jump).to_i]
+            i += 1
+          end
+          cell = i
+        end
+        cell
+      }
+    }
+  end
   return matrix
 end
 
@@ -51,7 +85,8 @@ def colorize_matrix(matrix, options = {})
   matrix.collect! {|row|
     row.collect! {|cell|
       if cell
-        cell = TimeTools.wheel_color_window(cell).join("") # window
+        colors = TimeTools.wheel_color_window(cell) # window
+        cell = "#%02x%02x%02x" % colors
       else
         cell = nil
       end
@@ -84,15 +119,24 @@ def get_threads(options = {})
   return ThreadStore.all()
 end
 
+def time_sort_threads(threads)
+  return threads
+end
+
 def save_thread(file_infix, thread_array, options = {})
   puts '# Saving thread'
   options_string = ".tsort_#{options[:tsort].to_s}." + "collect_#{options[:collect].to_s}"
   thread = ThreadStore.new(:file_name => "#{file_infix}#{options_string}", :array => thread_array)
-  thread.save_json()
+  thread.save_json(:variable => "thread" + options_string.gsub(".", "_"))
 end
 
 def do_thread(options = {})
-  thread_matrix = thread_matrix(options)
+  threads = get_threads(options)
+  threads.reject! {|t| t.size < 40}
+  if options[:tsort]
+    threads = time_sort_threads(threads)
+  end
+  thread_matrix = thread_matrix(threads, options)
   pruned_matrix = prune_matrix(thread_matrix, options)
   summary_matrix = summarize_matrix(pruned_matrix, options)
   colored_matrix = colorize_matrix(summary_matrix, options)
@@ -107,8 +151,8 @@ if args[0] == "tsort"
   overall_options[:tsort] = true
   args.delete_at(0)
 end
-if args[0] == "karma"
-  overall_options[:collect] = :karma
+if args[0] == "rating"
+  overall_options[:collect] = :rating
   args.delete_at(0)
 else
   overall_options[:collect] = :time

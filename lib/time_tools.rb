@@ -164,4 +164,20 @@ class TimeTools
       return difference
     end
   end
+
+  def self.median(array)
+    array.sort!
+    mid = (array.length - 1) / 2
+    if array.length % 2 == 0
+      mid2 = (array.length) / 2
+      return ((array[mid] + array[mid2]) / 2.0).to_i
+    else
+      return array[mid]
+    end
+  end
+
+  def self.average(array)
+    sum = array.inject(0) { |sum, x| sum += x }
+    return sum / array.size.to_f
+  end
 end
