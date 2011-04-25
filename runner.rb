@@ -46,6 +46,9 @@ class Runner
           "./networker.rb [<environment>]",
           "./networker.rb window [<environment>]",
           "./statter.rb [<environment>]"],
+      :networks => [
+          "./networker.rb [<mode>] standard", # a hack
+          "./networker.rb [<mode>] standardmw"],
       :user => [
           "./production/user_scraper.rb [<environment>]",
           "./parser.rb user [<environment>]"]
@@ -59,6 +62,7 @@ class Runner
     # Set defaults
     @options = OpenStruct.new
     @options.environment = "test"
+    @options.mode = nil
     @options.list = false
     @options.task = :sample
   end
@@ -81,6 +85,10 @@ class Runner
     opts.on('-e', '--environment <environment>') do |environment| 
       @options.environment = environment
     end
+    opts.on('-m', '--mode <mode>') do |mode| 
+      @options.mode = mode
+    end
+
     opts.on('-l', '--list')        { @options.list = true }
     opts.on('-h', '--help')        { output_help }
 
@@ -117,7 +125,8 @@ class Runner
     else
       tasks = {@options.task => TASKS[@options.task]}
     end
-    tasks = enter_arguments(tasks, {:environment => @options.environment})
+    tasks = enter_arguments(tasks, 
+        {:environment => @options.environment, :mode => @options.mode})
     process_tasks(tasks)
   end
 
@@ -140,6 +149,8 @@ class Runner
         arguments.each_pair do |name, argument|
           if argument
             line.gsub!(/\[<#{name}>\]/, argument)
+          else
+            line.gsub!(/\[<#{name}>\] /, "")
           end
         end
         line

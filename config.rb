@@ -17,22 +17,36 @@ def initialize_environment(args)
   ForumTools.config(:samples => {
       :test => {:start_time => Time.utc(2011,"feb",2), :end_time => Time.utc(2011,"feb",4)},
       :febmar => {:end_time => Time.utc(2011,"apr",2)},
-      :midweek => {:days => [2,3]},
-      :standard => {:days => [2,3], :end_time => Time.utc(2011,"mar",12)}
+      :febmarmw => {:days => [2,3]},
+      :standard => {:end_time => Time.utc(2011,"mar",12)},
+      :standardmw => {:days => [2,3], :end_time => Time.utc(2011,"mar",12)}
   })
 
-  # Minimum number of posts required if in prolific category
   ForumTools.config(:prolific_cutoff => (ForumTools::CONFIG[:environment] == "test" ? 3 : 25))
-  #ForumTools.config(:prolific_cutoff => (ForumTools::CONFIG[:environment] == "test" ? 3 : 60))
   ForumTools.config(:unprolific_cutdown => (ForumTools::CONFIG[:environment] == "test" ? 2 : 5))
-  #ForumTools.config(:prolificity_prune => :unprolific)
-  ForumTools.config(:prolificity_prune => false)
-  ForumTools.config(:interaction_cutoff => (ForumTools::CONFIG[:environment] == "test" ? 2 : 1))
-#  ForumTools.config(:reciprocity_cutoff => (ForumTools::CONFIG[:environment] == "test" ? 2 : 2))
-  ForumTools.config(:max_hours_on_frontpage => 12)
+  #ForumTools.config(:prolificity_prune => false)
+  ForumTools.config(:max_hours_on_frontpage => 50)
   ForumTools.config(:only_single_peak => false)
   ForumTools.config(:undirected => true)
-  ForumTools.config(:hop_cutoff => 5) # for regression
+
+  network = :reciprocity
+
+  if network == :test
+    #ForumTools.config(:interaction_cutoff => 2)
+    ForumTools.config(:reciprocity_cutoff => 2)
+    #ForumTools.config(:prolificity_prune => :unprolific)
+  elsif network == :whole
+    ForumTools.config(:max_hours_on_frontpage => 50)
+  elsif network == :unprolific
+    ForumTools.config(:prolificity_prune => :unprolific)
+  elsif network == :reciprocity
+    ForumTools.config(:reciprocity_cutoff => 2)
+  elsif network == :interaction
+    ForumTools.config(:interaction_cutoff => 3)
+  end
+
+  # For regression
+  ForumTools.config(:hop_cutoff => 5)
 
   # Overall root
   ForumTools.config(:root_dir => "/home/wybo/projects/hnscraper/")
@@ -42,6 +56,7 @@ def initialize_environment(args)
 
   # Production data dir, used by sampler as source dir
   ForumTools.config(:production_dir => ForumTools::CONFIG[:root_dir] + "production/")
+  ForumTools.config(:febmar_dir => ForumTools::CONFIG[:root_dir] + "febmar/")
 
   # Var
   ForumTools.config(:data_dir => "data/")

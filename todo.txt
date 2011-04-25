@@ -1,4 +1,9 @@
+Consider whether add other weekdays again
+Save whole network
+Split users by morning and evening
+
 Data preparation
+- Check that interaction cutoff 1 is whole network
 - Directed, times of interaction between users colors arc
 - List of threads and lenght of time on homepage
 - Line plot of 16 overlayed single-peak and 16 multi-peak
@@ -38,6 +43,7 @@ Bonus
   - weed out non-principle component for regressions
 - Proportion that interacts within window / window distance
 - Degree and betweenness centrality scatter plot
+- Get more timezone data
 
 Blog post
 - Best time to post, karma?

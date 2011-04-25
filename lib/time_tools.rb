@@ -1,4 +1,5 @@
 require 'rubygems'
+require 'tzinfo'
 require 'active_support/all'
 
 class TimeTools
@@ -106,7 +107,7 @@ class TimeTools
 
   def self.per_period_adder(times, period_string)
     x_for_each_y = []
-    if period_string == "hour" or period_string == "windows" # needed for hour alignments
+    if period_string == "hour" or period_string == "windows" or period_string == "echo_hour" # needed for hour alignments
       24.times do |i|
         x_for_each_y[i] = 0
       end
@@ -141,6 +142,15 @@ class TimeTools
     else
       return false
     end
+  end
+
+  def self.timezone_align_window(window, timezone_string, post_time)
+    offset = TZInfo::Timezone.get(timezone_string).period_for_utc(post_time).utc_total_offset / 3600
+    window = window + offset
+    if window < 0
+      window += 24
+    end
+    return window
   end
 
   def self.hour(time)

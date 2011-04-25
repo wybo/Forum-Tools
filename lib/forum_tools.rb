@@ -17,16 +17,19 @@ class ForumTools
       if CONFIG[:env_dir] == CONFIG[:production_dir]
         raise "Cannot clear dir as this would delete all files"
       end
-      FileUtils.rm_rf(CONFIG[:env_dir] + CONFIG[:data_dir])
       FileUtils.rm_rf(CONFIG[:env_dir] + CONFIG[:var_dir])
+      FileUtils.rm_rf(CONFIG[:env_dir] + CONFIG[:data_dir])
+#      FileUtils.rm_rf(CONFIG[:env_dir] + CONFIG[:raw_dir])
+#      FileUtils.rm_rf(CONFIG[:env_dir] + CONFIG[:yaml_dir])
+
     end
 
     def self.init_dirs
+      FileUtils.mkdir_p(CONFIG[:env_dir] + CONFIG[:var_dir])
       FileUtils.mkdir_p(CONFIG[:env_dir] + CONFIG[:raw_dir])
       FileUtils.mkdir_p(CONFIG[:env_dir] + CONFIG[:yaml_dir])
       FileUtils.mkdir_p(CONFIG[:env_dir] + CONFIG[:net_dir])
       FileUtils.mkdir_p(CONFIG[:env_dir] + CONFIG[:stat_dir])
-      FileUtils.mkdir_p(CONFIG[:env_dir] + CONFIG[:var_dir])
     end
 
     def self.fetch_html(file_prefix, url)
@@ -127,8 +130,8 @@ class ForumTools
         edges = "Arcs"
       end
 
-      users = self.get_unique_users(network_hash)
-      users_hash = self.get_users_hash(users)
+      users = ::ForumTools::Data.get_unique_users(network_hash)
+      users_hash = ::ForumTools::Data.get_users_hash(users)
 
       lines = ["*Vertices #{users.size.to_s}"]
       colors = ""
@@ -168,8 +171,8 @@ class ForumTools
   <graph mode="static" defaultedgetype="#{(options[:undirected] ? "undirected" : "directed")}" timeformat="double">
     <nodes>
 EOS
-      users = self.get_unique_users(network_hash)
-      users_hash = self.get_users_hash(users)
+      users = ::ForumTools::Data.get_unique_users(network_hash)
+      users_hash = ::ForumTools::Data.get_users_hash(users)
       users.each do |user|
         chunks << <<-EOS
       <node id="#{users_hash[user]}" label="#{user}">
@@ -271,8 +274,8 @@ EOS
   <key id="E-Edge Weight" for="edge" attr.name="Edge Weight" attr.type="string" />
   <graph edgedefault="#{(options[:undirected] ? "undirected" : "directed")}">
 EOS
-      users = self.get_unique_users(network_hash)
-      users_hash = self.get_users_hash(users)
+      users = ::ForumTools::Data.get_unique_users(network_hash)
+      users_hash = ::ForumTools::Data.get_users_hash(users)
       users.each do |user|
         chunks << <<-EOS
     <node id="#{users_hash[user]}">
@@ -331,6 +334,31 @@ EOS
 
     ### Helpers
 
+    def self.set_extension(file_prefix, extension)
+      return ::File.basename(file_prefix, extension) + extension
+    end
+
+    def self.json_dir_file_name(file_prefix, options)
+      file_name = self.set_extension(file_prefix, ".json.js")
+      return CONFIG[:abf_dir] + file_name
+    end
+
+    def self.yaml_dir_file_name(file_prefix, options)
+      file_name = self.set_extension(file_prefix, ".yaml")
+      if options[:env_dir]
+        env_dir = options[:env_dir]
+      else
+        env_dir = CONFIG[:env_dir]
+      end
+      if options[:var]
+        return env_dir + CONFIG[:var_dir] + file_name
+      else
+        return env_dir + CONFIG[:yaml_dir] + file_name
+      end
+    end
+  end
+
+  class Data
     def self.get_unique_users(network_hash)
       users = []
       network_hash.each_pair do |user1, hash|
@@ -353,27 +381,28 @@ EOS
       return users_hash
     end
 
-    def self.set_extension(file_prefix, extension)
-      return ::File.basename(file_prefix, extension) + extension
-    end
-
-    def self.json_dir_file_name(file_prefix, options)
-      file_name = self.set_extension(file_prefix, ".json.js")
-      return CONFIG[:abf_dir] + file_name
-    end
-
-    def self.yaml_dir_file_name(file_prefix, options)
-      file_name = self.set_extension(file_prefix, ".yaml")
-      if options[:env_dir]
-        env_dir = options[:env_dir]
-      else
-        env_dir = CONFIG[:env_dir]
+    def self.sample(array_or_hash, size)
+      if array_or_hash.kind_of?(Hash)
+        sampled_keys = self.sample(array_or_hash.keys, size)
+        new_hash = {}
+        sampled_keys.each do |key|
+          new_hash[key] = array_or_hash[key]
+        end
+        return new_hash
       end
-      if options[:var]
-        return env_dir + CONFIG[:var_dir] + file_name
-      else
-        return env_dir + CONFIG[:yaml_dir] + file_name
+      if array_or_hash.size <= size
+        return array_or_hash
       end
+      sample = []
+      included_hash = {}
+      while sample.size < size
+        pick = array_or_hash.choice
+        if !included_hash[pick]
+          sample << pick
+          included_hash[pick] = 1
+        end
+      end
+      return sample
     end
   end
 end

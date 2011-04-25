@@ -194,3 +194,51 @@ class HNUserParser < HNParser
     return self
   end
 end
+
+class HNUsersListParser < HNParser
+  def initialize(file_name)
+    super(file_name)
+    doc = self.read_html()
+    doc.css('div.userlistitem div.details h2 a').each do |user_link|
+      self << user_link.content
+    end
+    self.name = @file_name.split("_")[1]
+    return self
+  end
+end
+
+class HNTimezoneListParser < HNUsersListParser
+  def self.all
+    return HNParser.all(HNTimezoneListParser, "timezone*")
+  end
+
+  def initialize(file_name)
+    super(file_name)
+    if self.name == "westcoast"
+      self.name = "America/Los_Angeles"
+    elsif self.name == "uk"
+      self.name = "Europe/London"
+    else
+      raise "Invalid name"
+    end
+    return self
+  end
+end
+
+class HNCountryListParser < HNUsersListParser
+  def self.all
+    return HNParser.all(HNCountryListParser, "country*")
+  end
+
+  def initialize(file_name)
+    super(file_name)
+    if self.name == "westcoast"
+      self.name = "US"
+    elsif self.name == "uk"
+      self.name = "UK"
+    else
+      raise "Invalid name"
+    end
+    return self
+  end
+end

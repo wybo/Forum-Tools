@@ -146,9 +146,11 @@ end
 def undirect(network_hash)
   network_hash.keys.sort.each do |user1|
     network_hash[user1].keys.sort.each do |user2|
-      if network_hash[user2] and network_hash[user2][user1]
-        network_hash[user1][user2] += network_hash[user2][user1]
-        network_hash[user2].delete(user1)
+      if user1 < user2
+        if network_hash[user2] and network_hash[user2][user1]
+          network_hash[user1][user2] += network_hash[user2][user1]
+          network_hash[user2].delete(user1)
+        end
       end
     end
   end

@@ -6,6 +6,7 @@ require 'active_support/all'
 puts "### Taking a sample"
 
 def sample(options = {})
+  puts "# Selecting raw files"
   if options[:start_time]
     start_time = options[:start_time]
   else
@@ -32,8 +33,8 @@ def sample(options = {})
   return list
 end
 
-def days_sample(options = {})
-  puts "# Selecting files"
+def after_parse_sample(options = {})
+  puts "# Selecting yaml files"
   list = []
   file_names = Dir.glob(ForumTools::CONFIG[:production_dir] +
       ForumTools::CONFIG[:yaml_dir] + "*")
@@ -43,12 +44,14 @@ def days_sample(options = {})
       thread = ThreadStore.new(:file_name => base_name, 
           :env_dir => ForumTools::CONFIG[:production_dir])
       time = Time.at(thread[0][:time]).utc
-      if (options[:days].include?(time.wday) and 
+      if (!options[:days] or options[:days].include?(time.wday) and 
           (!options[:end_time] or time < options[:end_time]))
         list << base_name
       end
     end
+    print "."
   end
+  print "\n"
   puts "selected #{list.size.to_s}"
   return list
 end
@@ -67,11 +70,20 @@ def populate(list, raw_yaml)
   print "\n"
 end
 
+def link_raw
+  if ForumTools::CONFIG[:env_dir] != ForumTools::CONFIG[:production_dir]
+    FileUtils.rm_rf(ForumTools::CONFIG[:env_dir] + ForumTools::CONFIG[:raw_dir])
+    `cd #{ForumTools::CONFIG[:env_dir]}; ln -s #{ForumTools::CONFIG[:febmar_dir] + ForumTools::CONFIG[:raw_dir]} #{ForumTools::CONFIG[:raw_dir].chop}`
+  end
+end
+
 args = ARGV.to_a
-if args[0] == "midweek" or args[0] == "standard" # also env
+if args[0] == "after"
+  args.delete_at(0)
   initialize_environment(args)
-  list = days_sample(ForumTools::CONFIG[:samples][ForumTools::CONFIG[:environment].to_sym])
+  list = after_parse_sample(ForumTools::CONFIG[:samples][ForumTools::CONFIG[:environment].to_sym])
   populate(list, ForumTools::CONFIG[:yaml_dir])
+  link_raw()
 else
   initialize_environment(args)
   list = sample(ForumTools::CONFIG[:samples][ForumTools::CONFIG[:environment].to_sym])

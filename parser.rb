@@ -54,7 +54,7 @@ def set_on_frontpage_times
   puts '# Estimating when threads are on frontpage'
   puts 'reading index pages:'
   indices = HNIndexParser.all("index*")
-  indices.sort {|x, y| x.save_time <=> y.save_time}
+  indices.sort! {|x, y| x.save_time <=> y.save_time}
   puts 'estimating when on and off frontpage:'
   added_hash = {}
   on_done_hash = {}
@@ -130,10 +130,23 @@ def parse_users
     peak_window_for_each_user[user] = TimeTools.peak_window(times)
     posts_per_hour_for_each_user[user] = TimeTools.per_period_adder(times, "hour")
   end
+  puts 'from user-pages if available'
   other_for_each_user_hash = {}
-  puts 'from html if available'
   HNUserParser.all.each do |user|
     other_for_each_user_hash[user.name] = user.to_hash
+  end
+  puts 'from timezones if available'
+  timezone_for_each_user_hash = {}
+  HNTimezoneListParser.all.each do |timezone_list|
+    timezone_list.each do |user|
+      timezone_for_each_user_hash[user] = timezone_list.name
+    end
+  end
+  country_for_each_user_hash = {}
+  HNCountryListParser.all.each do |country_list|
+    country_list.each do |user|
+      country_for_each_user_hash[user] = country_list.name
+    end
   end
   store = UsersStore.new()
   store_for_each_user_hash = store.hash
@@ -151,6 +164,12 @@ def parse_users
     user[:posts] = times.size
     user[:peak_window] = peak_window
     user[:single_peak] = TimeTools.single_peak(peak_window, posts_per_hour_for_each_user[name])
+    if timezone_for_each_user_hash[name]
+      user[:timezone] = timezone_for_each_user_hash[name]
+    end
+    if country_for_each_user_hash[name]
+      user[:country] = country_for_each_user_hash[name]
+    end
     store << user
   end
   store.save

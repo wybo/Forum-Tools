@@ -96,38 +96,67 @@ def per_user_over_time
   threads = ThreadStore.all()
   users = UsersStore.new()
   prolific_user_hash = users.prolific_hash()
-  times_for_each_prolific_user_hash = {}
+  times_for_each_user_hash = {}
   threads.each do |thread|
     thread.each do |post|
-      if prolific_user_hash[post[:user]]
-        if !times_for_each_prolific_user_hash[post[:user]]
-          times_for_each_prolific_user_hash[post[:user]] = []
-        end
-        times_for_each_prolific_user_hash[post[:user]] << post[:time]
+      if !times_for_each_user_hash[post[:user]]
+        times_for_each_user_hash[post[:user]] = []
       end
+      times_for_each_user_hash[post[:user]] << post[:time]
     end
   end
 
   puts 'Posts per hour for each prolific user'
+  posts_per_hour_for_each_user = {}
   posts_per_hour_for_each_prolific_user = {}
-  times_for_each_prolific_user_hash.each_pair do |user, times|
-    posts_per_hour_for_each_prolific_user[user] = TimeTools.per_period_adder(times, "hour")
-  end
-  ForumTools::File.save_stat("posts_per_hour_for_each_prolific_user",
-      columnize_users_hash(posts_per_hour_for_each_prolific_user),
-      :add_case_numbers => true)
-
-  puts 'Aligned posts per hour for each prolific user'
-  aligned_posts_per_hour_for_each_prolific_user = {}
-  users.each do |user|
-    if prolific_user_hash[user[:name]]
-      hour_counts = posts_per_hour_for_each_prolific_user[user[:name]]
-      aligned_posts_per_hour_for_each_prolific_user[user[:name]] = 
-          hour_counts[(user[:peak_window] - 24)..-1].concat(hour_counts[0...user[:peak_window]])
+  times_for_each_user_hash.each_pair do |user, times|
+    times_per_hour = TimeTools.per_period_adder(times, "hour")
+    posts_per_hour_for_each_user[user] = times_per_hour
+    if prolific_user_hash[user]
+      posts_per_hour_for_each_prolific_user[user] = times_per_hour
     end
   end
-  ForumTools::File.save_stat("aligned_posts_per_hour_for_each_prolific_user",
-      columnize_users_hash(aligned_posts_per_hour_for_each_prolific_user),
+  sampled_posts_per_hour_for_each_prolific_user = ForumTools::Data.sample(
+      posts_per_hour_for_each_prolific_user, 10)
+  ForumTools::File.save_stat("posts_per_hour_for_sampled_prolific_users",
+      columnize_users_hash(sampled_posts_per_hour_for_each_prolific_user),
+      :add_case_numbers => true)
+
+  puts 'Timezoned posts per hour for prolific users'
+  timezoned_posts_per_hour_for_each_user = {}
+  timezoned_posts_per_hour_for_each_prolific_user = {}
+  users.each do |user|
+    if user[:timezone]
+      peak_window = TimeTools.timezone_align_window(user[:peak_window], user[:timezone],
+          times_for_each_user_hash[user[:name]][-1])
+      hour_counts = posts_per_hour_for_each_user[user[:name]]
+      timezoned_hour_counts = hour_counts[(peak_window - 24)..-1].concat(hour_counts[0...peak_window])
+      timezoned_posts_per_hour_for_each_user[user[:name]] = timezoned_hour_counts
+      if prolific_user_hash[user[:name]]
+        timezoned_posts_per_hour_for_each_prolific_user[user[:name]] = timezoned_hour_counts
+      end
+    end
+  end
+  sampled_timezoned_posts_per_hour_for_each_prolific_user = ForumTools::Data.sample(
+      timezoned_posts_per_hour_for_each_prolific_user, 10)
+  ForumTools::File.save_stat("timezoned_posts_per_hour_for_sampled_prolific_users",
+      columnize_users_hash(sampled_timezoned_posts_per_hour_for_each_prolific_user),
+      :add_case_numbers => true)
+
+  puts 'Aggregate timezoned posts per hour'
+  aggregate_timezoned_posts = []
+  timezoned_posts_per_hour_for_each_user.each_pair do |user, counts|
+    i = 0
+    counts.each do |count|
+      if !aggregate_timezoned_posts[i]
+        aggregate_timezoned_posts[i] = 0
+      end
+      aggregate_timezoned_posts[i] += count
+      i += 1
+    end
+  end
+  ForumTools::File.save_stat("aggregate_timezoned_posts",
+      ["posts"].concat(aggregate_timezoned_posts),
       :add_case_numbers => true)
 end
 
@@ -220,7 +249,7 @@ def distances(options = {})
       puts "Median circadian distance between users posts"
       reply_distance_between_users = []
       median_circadian_distance_between_users_posts = []
-      users = sample(network.users, 1000)
+      users = ForumTools.sample(network.users, 1000)
       users_hash = UsersStore.new().hash
       users.collect! {|u| users_hash[u] }
 
@@ -270,22 +299,6 @@ def columnize_users_hash(user_hash)
   return columns
 end
 
-def sample(array, size)
-  if array.size <= size
-    return array
-  end
-  sample = []
-  included_hash = {}
-  while sample.size < size
-    pick = array.choice
-    if !included_hash[pick]
-      sample << pick
-      included_hash[pick] = 1
-    end
-  end
-  return sample
-end
-
 args = ARGV.to_a
 if args[0] == "dist"
   args.delete_at(0)
@@ -293,8 +306,8 @@ if args[0] == "dist"
   distances(:hop_cutoff => ForumTools::CONFIG[:hop_cutoff])
 else
   initialize_environment(args)
-  simple()
-  over_time()
+#  simple()
+#  over_time()
   per_user_over_time()
-  measures()
+#  measures()
 end
