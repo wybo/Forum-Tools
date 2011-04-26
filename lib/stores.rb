@@ -29,6 +29,7 @@ class Store < OpenStructArray
 end
 
 class HashStore < Hash
+  attr_reader :file_name
   def initialize(file_name, options = {})
     @file_name = file_name
     @yaml_options = options
@@ -262,7 +263,11 @@ class NetworkStore < HashStore
   end
 
   def initialize(file_name, options = {})  
-    super((File.basename(file_name, ".net") + ".yaml"), options.merge(:var => true))
+    if options[:keep_path]
+      super((File.dirname(file_name) + "/" + File.basename(file_name, ".net") + ".yaml"), options)
+    else
+      super((File.basename(file_name, ".net") + ".yaml"), options.merge(:var => true))
+    end
   end
 
   def users

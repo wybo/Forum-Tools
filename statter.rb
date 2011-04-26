@@ -176,13 +176,11 @@ def measures
       if indent_pointer > last_indent_pointer + 1 # fill gap due to a delete
         indent_stack[indent_pointer - 1] = indent_stack[last_indent_pointer]
       end
-      if indent_pointer > 1 # not for whole posts
+      while indent_stack[indent_pointer - 1][:id] > post[:id] and indent_pointer > 0 # if posts are deleted without gap, such as indent 1
+        indent_pointer -= 1
+      end
+      if indent_pointer > 1 # only between replies
         difference = post[:time] - indent_stack[indent_pointer - 1][:time]
-        while difference < 0 and indent_pointer > 0 # if posts are deleted without gap, such as indent 1
-          indent_pointer -= 1
-          difference = post[:time] - indent_stack[indent_pointer - 1][:time]
-        end
-        puts difference if difference < 0
         time_between_posts_and_each_reply << difference
       end
     end
@@ -209,47 +207,29 @@ def distances(options = {})
   differences_store = TimeDifferencesStore.new()
   NetworkStore.all_pajek_file_names.each do |network_file|
     base_name = File.basename(network_file)
-    if base_name == "all_replies.cut_reciprocity_1.max_fr_25.singl_pk_false.undr_true.net" or
-        base_name == "all_replies.cut_reciprocity_2.max_fr_12.singl_pk_false.undr_true.net" or
-        base_name == "all_replies.cut_reciprocity_3.max_fr_12.singl_pk_false.undr_true.net" or
-        base_name == "all_replies.cut_interaction_4.max_fr_12.singl_pk_false.undr_true.net" or
-        base_name == "all_shareds.cut_interaction_5.max_fr_12.singl_pk_false.undr_true.net" or
-        base_name == "all_shareds.cut_interaction_5.max_fr_4.singl_pk_false.undr_true.net" or
-        base_name == "all_replies.cut_unprolific_5.max_fr_12.singl_pk_false.undr_true.net"
-      puts "Network-distances between users"
+    #if base_name == "all_replies.cut_false.max_fr_50.singl_pk_false.undr_true.net"
+    #if base_name == "all_replies.cut_reciprocity_3.max_fr_50.singl_pk_false.undr_true.net" or
+      #  base_name == "all_replies.cut_unprolific_5.max_fr_50.singl_pk_false.undr_true.net"
+    if false or
+#        base_name == "all_replies.cut_interaction_4.max_fr_50.singl_pk_false.undr_true.net" or
+#        base_name == "all_replies.cut_reciprocity_2.max_fr_50.singl_pk_false.undr_true.net" or
+#        base_name == "all_replies.cut_unprolific_5.max_fr_50.singl_pk_false.undr_true.net" or
+#        base_name == "all_replies.cut_reciprocity_1.max_fr_50.singl_pk_false.undr_true.net" or
+#        base_name == "all_replies.cut_reciprocity_1.unprolific_15.max_fr_50.singl_pk_false.undr_true.net" or
+#        base_name == "all_replies.cut_reciprocity_1.unprolific_5.max_fr_50.singl_pk_false.undr_true.net" or
+#        base_name == "all_replies.cut_reciprocity_3.max_fr_8.singl_pk_false.undr_true.net" or
+#        base_name == "all_replies.cut_unprolific_5.max_fr_8.singl_pk_false.undr_true.net" or
+#        base_name == "all_replies.cut_reciprocity_3.max_fr_12.singl_pk_false.undr_true.net" or
+#        base_name == "all_replies.replies_only.cut_reciprocity_2.max_fr_12.singl_pk_false.undr_true.net" or
+        base_name == "all_replies.replies_only.cut_reciprocity_3.max_fr_12.singl_pk_false.undr_true.net" or
+        false
       network = NetworkStore.new(network_file)
-      users = network.users
-      reply_distance_between_users_hash = {}
-      matrix = `helper_scripts/shortest_distances.r #{network_file}`
-      rows = matrix.split("\n")
-      rows.collect! { |r| r.strip.squeeze(" ").split(" ") }
-      i = 0
-      rows.each do |cells|
-        j = 0
-        cells.each do |cell|
-          if j < i
-            if !reply_distance_between_users_hash[users[i]]
-              reply_distance_between_users_hash[users[i]] = {}
-            end
-            if cell == "Inf"
-              cell = ""
-            else
-              cell = cell.to_i
-            end
-            if cell.kind_of?(Numeric) and options[:hop_cutoff] and cell > options[:hop_cutoff]
-              cell = ""
-            end
-            reply_distance_between_users_hash[users[i]][users[j]] = cell
-          end
-          j += 1
-        end
-        i += 1
-      end
+      reply_distance_between_users_hash = get_network_distances(network, network_file, options)
 
       puts "Median circadian distance between users posts"
       reply_distance_between_users = []
       median_circadian_distance_between_users_posts = []
-      users = ForumTools.sample(network.users, 1000)
+      users = ForumTools::Data.sample(network.users, 1000)
       users_hash = UsersStore.new().hash
       users.collect! {|u| users_hash[u] }
 
@@ -269,7 +249,7 @@ def distances(options = {})
                   differences << TimeTools.circadian_difference(time1 - time2)
                 end
               end
-              differences_store[user1[:name]][user2[:name]] = TimeTools.median(differences)
+              differences_store[user1[:name]][user2[:name]] = ForumTools::Data.median(differences)
             end
             median_circadian_distance_between_users_posts << differences_store[user1[:name]][user2[:name]]
             reply_distance_between_users << reply_distance_between_users_hash[user1[:name]][user2[:name]]
@@ -279,17 +259,136 @@ def distances(options = {})
       end
       print "\n"
 
-      ForumTools::File.save_stat("distances_between_users.cut_hop_#{options[:hop_cutoff]}.#{File.basename(network_file, ".net")}",
+      ForumTools::File.save_stat("distances_between_users.cut_hop_#{options[:hop_cutoff]}.#{File.basename(network.file_name, ".net")}",
           [["distance"].concat(reply_distance_between_users),
            ["time"].concat(median_circadian_distance_between_users_posts)])
       puts "Saved output, don't close yet"
     end
   end
-  differences_store.save
+#  differences_store.save
   puts "Done, saved time differences store"
 end
 
+def daylight_saving_time
+  network_before = read_dst_network("dst2weeksbefore")
+  network_after = read_dst_network("dst2weeksafter")
+  reply_distance_between_users_before_hash =
+      get_network_distances(network_before, dst_pajek_file_dir_name("dst2weeksbefore"))
+  reply_distance_between_users_after_hash =
+      get_network_distances(network_after, dst_pajek_file_dir_name("dst2weeksafter"))
+  users_before = network_before.users
+  puts users_before.size
+  users_hash = UsersStore.new().hash
+  users_before.collect! {|u| users_hash[u] }
+
+  reply_distance_between_selected_users_before = []
+  reply_distance_between_selected_users_after = []
+  puts users_before.size
+  users_before.each do |user1|
+    users_before.each do |user2|
+      if (user2[:name] < user1[:name]) and 
+          ((user1[:timezone] == "America/Los_Angeles" and user2[:country] == "UK") or
+           (user1[:country] == "UK" and user2[:timezone] == "America/Los_Angeles")) and
+          (reply_distance_between_users_before_hash[user1[:name]][user2[:name]] and
+           !reply_distance_between_users_before_hash[user1[:name]][user2[:name]].kind_of?(String)) and
+          (reply_distance_between_users_after_hash[user1[:name]][user2[:name]] and
+           !reply_distance_between_users_after_hash[user1[:name]][user2[:name]].kind_of?(String))
+        puts "adding"
+        reply_distance_between_selected_users_before << 
+            reply_distance_between_users_before_hash[user1[:name]][user2[:name]]
+        reply_distance_between_selected_users_after <<
+            reply_distance_between_users_after_hash[user1[:name]][user2[:name]]
+      end
+    end
+  end
+
+  puts "Before average: " + ForumTools::Data.average(reply_distance_between_selected_users_before).to_s
+  puts "After average:" + ForumTools::Data.average(reply_distance_between_selected_users_after).to_s
+
+  ForumTools::File.save_stat("distances_between_timezoned_users.#{File.basename(dst_pajek_file_name(), ".net")}",
+    [["before"].concat(reply_distance_between_selected_users_before),
+     ["after"].concat(reply_distance_between_selected_users_after)])
+  puts "Saved output"
+end
+
+def window_stats
+  puts "# Reciprocity and transitivity for windows"
+  reciprocities = []
+  transitivities = []
+  NetworkStore.all_pajek_file_names.sort.each do |network_file|
+    base_name = File.basename(network_file)
+    if base_name =~ /^wnd_/
+      puts "Doing window " + base_name
+      reciprocity_transitivity = `helper_scripts/network_measures.r #{network_file}`
+      rec_tra_arr = reciprocity_transitivity.split(" ")
+      reciprocities << rec_tra_arr[0].to_f
+      transitivities << rec_tra_arr[1].to_f
+    end
+  end
+
+  ForumTools::File.save_stat("window_reciprocities",
+      ["reciprocity"].concat(reciprocities),
+      :add_case_numbers => true)
+
+  ForumTools::File.save_stat("window_transitivities",
+      ["transitivity"].concat(transitivities),
+      :add_case_numbers => true)
+
+  ForumTools::File.save_stat("max_window_reciprocity", ["reciprocity", reciprocities.max])
+  ForumTools::File.save_stat("min_window_reciprocity", ["reciprocity", reciprocities.min])
+
+  ForumTools::File.save_stat("max_window_transitivity", ["transitivity", transitivities.max])
+  ForumTools::File.save_stat("min_window_transitivity", ["transitivity", transitivities.min])
+end
+
 ### Helper methods
+
+def read_dst_network(environment)
+  file_name = ForumTools::CONFIG[:root_dir] + environment + "/" +
+      ForumTools::CONFIG[:var_dir] + dst_pajek_file_name()
+  return NetworkStore.new(file_name, :keep_path => true)
+end
+
+def dst_pajek_file_dir_name(environment)
+  return ForumTools::CONFIG[:root_dir] + environment + "/" +
+      ForumTools::CONFIG[:net_dir] + dst_pajek_file_name()
+end
+
+def dst_pajek_file_name
+  return "all_replies.cut_false.max_fr_50.singl_pk_false.undr_true.net"
+end
+
+def get_network_distances(network, pajek_file_name, options = {})
+  puts "Network-distances between users"
+  users = network.users
+  reply_distance_between_users_hash = {}
+  matrix = `helper_scripts/shortest_distances.r #{pajek_file_name}`
+  rows = matrix.split("\n")
+  rows.collect! { |r| r.strip.squeeze(" ").split(" ") }
+  i = 0
+  rows.each do |cells|
+    j = 0
+    cells.each do |cell|
+      if j < i
+        if !reply_distance_between_users_hash[users[i]]
+          reply_distance_between_users_hash[users[i]] = {}
+        end
+        if cell == "Inf"
+          cell = ""
+        else
+          cell = cell.to_i
+        end
+        if cell.kind_of?(Numeric) and options[:hop_cutoff] and cell > options[:hop_cutoff]
+          cell = ""
+        end
+        reply_distance_between_users_hash[users[i]][users[j]] = cell
+      end
+      j += 1
+    end
+    i += 1
+  end
+  return reply_distance_between_users_hash
+end
 
 def columnize_users_hash(user_hash)
   columns = []
@@ -304,10 +403,18 @@ if args[0] == "dist"
   args.delete_at(0)
   initialize_environment(args)
   distances(:hop_cutoff => ForumTools::CONFIG[:hop_cutoff])
+elsif args[0] == "dst"
+  args.delete_at(0)
+  initialize_environment(args)
+  daylight_saving_time()
+elsif args[0] == "window"
+  args.delete_at(0)
+  initialize_environment(args)
+  window_stats()
 else
   initialize_environment(args)
-#  simple()
-#  over_time()
+  simple()
+  over_time()
   per_user_over_time()
-#  measures()
+  measures()
 end

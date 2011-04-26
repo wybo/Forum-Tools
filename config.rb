@@ -19,7 +19,9 @@ def initialize_environment(args)
       :febmar => {:end_time => Time.utc(2011,"apr",2)},
       :febmarmw => {:days => [2,3]},
       :standard => {:end_time => Time.utc(2011,"mar",12)},
-      :standardmw => {:days => [2,3], :end_time => Time.utc(2011,"mar",12)}
+      :standardmw => {:days => [2,3], :end_time => Time.utc(2011,"mar",12)},
+      :dst2weeksbefore => {:start_time => Time.utc(2011,"feb",28), :end_time => Time.utc(2011,"mar",11)},
+      :dst2weeksafter => {:start_time => Time.utc(2011,"mar",14), :end_time => Time.utc(2011,"mar",25)}
   })
 
   ForumTools.config(:prolific_cutoff => (ForumTools::CONFIG[:environment] == "test" ? 3 : 25))
@@ -27,26 +29,31 @@ def initialize_environment(args)
   #ForumTools.config(:prolificity_prune => false)
   ForumTools.config(:max_hours_on_frontpage => 50)
   ForumTools.config(:only_single_peak => false)
+  ForumTools.config(:between_replies_only => false)
   ForumTools.config(:undirected => true)
 
-  network = :reciprocity
+  network = :window
 
   if network == :test
     #ForumTools.config(:interaction_cutoff => 2)
     ForumTools.config(:reciprocity_cutoff => 2)
     #ForumTools.config(:prolificity_prune => :unprolific)
+  elsif network == :window
+    ForumTools.config(:undirected => false)
+    ForumTools.config(:max_hours_on_frontpage => 50)
   elsif network == :whole
     ForumTools.config(:max_hours_on_frontpage => 50)
   elsif network == :unprolific
     ForumTools.config(:prolificity_prune => :unprolific)
   elsif network == :reciprocity
-    ForumTools.config(:reciprocity_cutoff => 2)
+    ForumTools.config(:reciprocity_cutoff => 3)
+#    ForumTools.config(:prolificity_prune => :unprolific)
   elsif network == :interaction
-    ForumTools.config(:interaction_cutoff => 3)
+    ForumTools.config(:interaction_cutoff => 4)
   end
 
   # For regression
-  ForumTools.config(:hop_cutoff => 5)
+  ForumTools.config(:hop_cutoff => 20)
 
   # Overall root
   ForumTools.config(:root_dir => "/home/wybo/projects/hnscraper/")

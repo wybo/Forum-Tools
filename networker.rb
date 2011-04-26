@@ -8,6 +8,7 @@ COORDINATES = []
 24.times do |i|
   COORDINATES << [Math.cos(Math::PI / 12 * (i - 6)), Math.sin(Math::PI / 12 * (i + 6))]
 end
+COORDINATES << [0, 0]
 
 puts '### Extracting directed network'
 
@@ -20,6 +21,12 @@ def reply_list(options = {})
   if options[:only_single_peak]
     users_hash = UsersStore.new().hash()
   end
+  if options[:between_replies_only]
+    minimum_pointer = 1
+  else
+    minimum_pointer = 0
+    # both between thread prompts and comments and between comments
+  end
   threads = get_threads(options)
   threads.each do |thread|
     thread.each do |post|
@@ -29,11 +36,9 @@ def reply_list(options = {})
       if indent_pointer > last_indent_pointer + 1 # fill gap due to a delete
         indent_stack[indent_pointer - 1] = indent_stack[last_indent_pointer]
       end
-      if indent_pointer > 0
+      if indent_pointer > minimum_pointer
         previous_post = indent_stack[indent_pointer - 1]
-        if (!options[:window] or
-            (TimeTools.in_time_window(options[:window], post[:time]) and
-             TimeTools.in_time_window(options[:window], indent_stack[indent_pointer - 1][:time]))) and
+        if (!options[:window] or TimeTools.in_time_window(options[:window], post[:time])) and
            (!options[:only_single_peak] or
             (users_hash[post[:user]][:single_peak] and
              users_hash[previous_post[:user]][:single_peak]))
@@ -95,8 +100,16 @@ def circle_network_hash(reply_list, network_hash, options = {})
   users_hash = UsersStore.new().hash()
   reply_list.each do |pair|
     if network_hash[pair[0]] and network_hash[pair[0]][pair[1]]
-      window1 = users_hash[pair[0]][:peak_window]
-      window2 = users_hash[pair[1]][:peak_window]
+      if users_hash[pair[0]][:single_peak]
+        window1 = users_hash[pair[0]][:peak_window]
+      else
+        window1 = 24
+      end
+      if users_hash[pair[1]][:single_peak]
+        window2 = users_hash[pair[1]][:peak_window]
+      else
+        window2 = 24
+      end
       if !circle_network_hash[window1]
         circle_network_hash[window1] = {}
       end
@@ -275,9 +288,8 @@ def get_user_colors
       colors_hash[:pajek][user[:name]] = TimeTools.pajek_color_window(user[:peak_window])
       colors_hash[:gexf][user[:name]] = TimeTools.wheel_color_window(user[:peak_window])
     else
-      colors_hash[:pajek][user[:name]] = ["ic", TimeTools::PAJEK_NO_SINGLE_PEAK, 
-          "bc", TimeTools::PAJEK_NO_SINGLE_PEAK]
-      colors_hash[:gexf][user[:name]] = TimeTools::WHEEL_NO_SINGLE_PEAK
+      colors_hash[:pajek][user[:name]] = TimeTools.pajek_color_window(24) # the grey
+      colors_hash[:gexf][user[:name]] = TimeTools.wheel_color_window(24)
     end
   end
   return colors_hash
@@ -344,6 +356,9 @@ def save_network(file_infix, network_hash, options = {})
     cut = "interaction_" + options[:interaction_cutoff].to_s
   elsif options[:reciprocity_cutoff]
     cut = "reciprocity_" + options[:reciprocity_cutoff].to_s
+    if options[:unprolific_cutdown]
+      cut += ".unprolific_" + options[:unprolific_cutdown].to_s
+    end
   elsif options[:prolific_cutoff]
     cut = "prolific_" + options[:prolific_cutoff].to_s
   elsif options[:unprolific_cutdown]
@@ -351,10 +366,15 @@ def save_network(file_infix, network_hash, options = {})
   else
     cut = "false"
   end
-  options_string = ".cut_#{cut}.max_fr_#{options[:max_hours_on_frontpage].to_s}." +
+  if options[:between_replies_only]
+    between = ".replies_only"
+  else
+    between = ""
+  end
+  options_string = "#{between}.cut_#{cut}.max_fr_#{options[:max_hours_on_frontpage].to_s}." +
       "singl_pk_#{options[:only_single_peak].to_s}.undr_#{options[:undirected].to_s}"
   if options[:window]
-    ForumTools::File.save_networks("wnd_#{options[:window].to_s}_#{file_infix}#{options_string}", network_hash, options)
+    ForumTools::File.save_networks("wnd_#{sprintf("%02d", options[:window])}_#{file_infix}#{options_string}", network_hash, options)
   else
     ForumTools::File.save_networks("all_#{file_infix}#{options_string}", network_hash, options)
   end
@@ -369,6 +389,9 @@ def reduce(network_hash, options = {})
   elsif options[:reciprocity_cutoff]
     network_hash = cutoff_prune(network_hash, options[:reciprocity_cutoff])
     network_hash = reciprocity_prune(network_hash)
+    if options[:unprolific_cutdown]
+      network_hash = prolific_prune(network_hash, false)
+    end
   elsif options[:prolific_cutoff]
     network_hash = prolific_prune(network_hash)
   elsif options[:unprolific_cutdown]
@@ -384,7 +407,9 @@ def do_replies(options = {})
   replies = reply_list(options)
   replies_network = network_hash(replies, options)
   reduced_replies_network = reduce(replies_network, options)
-  options[:edge_colors] = get_edge_colors(reduced_replies_network, options)
+  if !options[:window]
+    options[:edge_colors] = get_edge_colors(reduced_replies_network, options)
+  end
   save_network("replies", reduced_replies_network, options)
 end
 
@@ -425,8 +450,10 @@ def do_network(options = {})
       do_circle(options)
     end
   else
-    options[:colors] = get_user_colors()
-    options[:coordinates] = get_user_coordinates()
+    if !options[:window]
+      options[:colors] = get_user_colors()
+      options[:coordinates] = get_user_coordinates()
+    end
     if options[:network] == "shareds"
       do_shareds(options)
     else
@@ -461,7 +488,8 @@ overall_options.merge!(
     :unprolific_cutdown => (ForumTools::CONFIG[:prolificity_prune] == :unprolific ? ForumTools::CONFIG[:unprolific_cutdown] : false),
     :max_hours_on_frontpage => ForumTools::CONFIG[:max_hours_on_frontpage],
     :only_single_peak => ForumTools::CONFIG[:only_single_peak],
-    :undirected => ForumTools::CONFIG[:undirected]
+    :undirected => ForumTools::CONFIG[:undirected],
+    :between_replies_only => ForumTools::CONFIG[:between_replies_only]
 )
 
 if overall_options[:window]

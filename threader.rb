@@ -51,10 +51,10 @@ def summarize_matrix(matrix, options = {})
     row.collect! {|cell|
       if cell
         if options[:collect] == :time
-          cell = TimeTools.peak_window(cell) # array of times
-   #       cell = TimeTools.median(cell) # array of times
+          cell = ForumTools::Data.peak_window(cell) # array of times
+   #       cell = ForumTools::Data.median(cell) # array of times
         else
-          cell = TimeTools.average(cell) # array of rating scores
+          cell = ForumTools::Data.average(cell) # array of rating scores
         end
         values << cell
       end

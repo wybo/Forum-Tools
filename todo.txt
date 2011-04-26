@@ -1,12 +1,5 @@
-Consider whether add other weekdays again
-Save whole network
-Split users by morning and evening
-
 Data preparation
-- Check that interaction cutoff 1 is whole network
-- Directed, times of interaction between users colors arc
 - List of threads and lenght of time on homepage
-- Line plot of 16 overlayed single-peak and 16 multi-peak
 - See MM
 
 Clusters
@@ -19,27 +12,18 @@ Clusters
 Clusering coeff nr of triplets closed / total nr of triplets, can do
 hash a => b, b => c, c => a. Does vary with network size, no solut.
 
-## Other
-
-E-mail bernie
-
-Wondering about regression over matrix (distances)
-Can turn into lists with same cases but corrections for
-non-independence
-
 ## Cut
 
 Bonus
-- Geo-code users, create graph of overlayed
-  - Posts with timezone times overlayed
-- Video of network as changes
-  - Add time-stamps
-- Prettify color coding and legenda
-  - fix opacity
-  - bars in stata
 - Regression
   - weekend vs weekday difference in time effect
   - time-zone shift US vs UK distance
+- Prettify color coding and legenda
+  - fix opacity
+  - bars in stata
+- Video of network as changes
+  - Add time-stamps
+- Regression
   - weed out non-principle component for regressions
 - Proportion that interacts within window / window distance
 - Degree and betweenness centrality scatter plot

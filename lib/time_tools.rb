@@ -20,6 +20,7 @@ class TimeTools
       "Blue", "NavyBlue", "CadetBlue", "MidnightBlue", "Cyan", "Turquose",
       "BlueGreen", "Emerald", "SeaGreen", "Green", "PineGreen", "YellowGreen"]
   PAJEK_NO_SINGLE_PEAK = "Grey"
+  PAJEK_COLORS << PAJEK_NO_SINGLE_PEAK
 
   WHEEL_PART_PART = []
   4.times do |i|
@@ -40,6 +41,7 @@ class TimeTools
     WHEEL_COLORS << [WHEEL_PART[i + 8], WHEEL_PART[i], WHEEL_PART[i - 8]]
   end
   WHEEL_NO_SINGLE_PEAK = [128, 128, 128]
+  WHEEL_COLORS << WHEEL_NO_SINGLE_PEAK
 
   def self.in_time_window(window, time)
     hour = TimeTools.hour(time)
@@ -137,7 +139,7 @@ class TimeTools
     posts_per_hour.each do |posts|
       overall_posts += posts
     end
-    if peak_posts * 3 > overall_posts
+    if peak_posts * 4 > overall_posts
       return true
     else
       return false
@@ -173,21 +175,5 @@ class TimeTools
     else
       return difference
     end
-  end
-
-  def self.median(array)
-    array.sort!
-    mid = (array.length - 1) / 2
-    if array.length % 2 == 0
-      mid2 = (array.length) / 2
-      return ((array[mid] + array[mid2]) / 2.0).to_i
-    else
-      return array[mid]
-    end
-  end
-
-  def self.average(array)
-    sum = array.inject(0) { |sum, x| sum += x }
-    return sum / array.size.to_f
   end
 end

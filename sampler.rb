@@ -45,6 +45,7 @@ def after_parse_sample(options = {})
           :env_dir => ForumTools::CONFIG[:production_dir])
       time = Time.at(thread[0][:time]).utc
       if (!options[:days] or options[:days].include?(time.wday) and 
+          (!options[:start_time] or time > options[:start_time]) and
           (!options[:end_time] or time < options[:end_time]))
         list << base_name
       end
