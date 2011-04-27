@@ -30,7 +30,7 @@ def initialize_environment(args)
   ForumTools.config(:max_hours_on_frontpage => 50)
   ForumTools.config(:only_single_peak => false)
   ForumTools.config(:between_replies_only => false)
-  ForumTools.config(:undirected => true)
+  ForumTools.config(:undirected => false)
 
   network = :window
 

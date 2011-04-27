@@ -1,11 +1,18 @@
 Data preparation
+- Calculate measures for whole network
+- Aggregate hourly posts for both timezones separately
 - List of threads and lenght of time on homepage
+- Time sort threads for karma heatmap
+- Time between posts for users in core network
 - See MM
 
 Clusters
 - Reciprocity inside and outside of windows
 - Directed small plot with bended arrows, see if diff
 - See MM
+
+Essay
+- Add bit on threads varying times on homepage
 
 ## Info
 
@@ -15,18 +22,13 @@ hash a => b, b => c, c => a. Does vary with network size, no solut.
 ## Cut
 
 Bonus
-- Regression
-  - weekend vs weekday difference in time effect
-  - time-zone shift US vs UK distance
 - Prettify color coding and legenda
   - fix opacity
   - bars in stata
+- Regression
+  - over directed network
 - Video of network as changes
   - Add time-stamps
-- Regression
-  - weed out non-principle component for regressions
-- Proportion that interacts within window / window distance
-- Degree and betweenness centrality scatter plot
 - Get more timezone data
 
 Blog post
@@ -38,6 +40,7 @@ Not at all
 - Weight posts relative to nr of posts in window
 - Unprolific and prolific posts per hour
 - Regression
+  - weekend vs weekday difference in time effect
   - karma difference
   - join time distance
 - Thread distance

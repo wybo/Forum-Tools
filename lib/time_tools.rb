@@ -146,13 +146,10 @@ class TimeTools
     end
   end
 
-  def self.timezone_align_window(window, timezone_string, post_time)
+  def self.timezone_offset(timezone_string, post_time)
     offset = TZInfo::Timezone.get(timezone_string).period_for_utc(post_time).utc_total_offset / 3600
-    window = window + offset
-    if window < 0
-      window += 24
-    end
-    return window
+    offset = offset * -1
+    return offset
   end
 
   def self.hour(time)
@@ -165,7 +162,11 @@ class TimeTools
   end
 
   def self.day(time)
-    return Time.at(time).utc.yday - TimeTools::CONFIG[:data_start_time].yday
+    time_object = Time.at(time).utc
+    if time_object.year != TimeTools::CONFIG[:data_start_time].year
+      raise 'Need updating for inter-year days'
+    end
+    return time_object.yday - TimeTools::CONFIG[:data_start_time].yday
   end
 
   def self.circadian_difference(difference)

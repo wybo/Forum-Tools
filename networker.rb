@@ -27,7 +27,11 @@ def reply_list(options = {})
     minimum_pointer = 0
     # both between thread prompts and comments and between comments
   end
-  threads = get_threads(options)
+  if options[:threads]
+    threads = options[:threads]
+  else
+    threads = get_threads(options)
+  end
   threads.each do |thread|
     thread.each do |post|
       last_indent_pointer = indent_pointer
@@ -39,6 +43,7 @@ def reply_list(options = {})
       if indent_pointer > minimum_pointer
         previous_post = indent_stack[indent_pointer - 1]
         if (!options[:window] or TimeTools.in_time_window(options[:window], post[:time])) and
+           (!options[:permutation_test] or options[:permutation_test].in_random_time_window(post[:time])) and
            (!options[:only_single_peak] or
             (users_hash[post[:user]][:single_peak] and
              users_hash[previous_post[:user]][:single_peak]))
@@ -60,8 +65,7 @@ def shared_thread_list(options = {})
   threads.each do |thread|
     users_list = []
     thread.each do |post|
-      if (!options[:window] or 
-          TimeTools.in_time_window(options[:window], post[:time])) and
+      if (!options[:window] or TimeTools.in_time_window(options[:window], post[:time])) and
          (!options[:only_single_peak] or
           users_hash[post[:user]][:single_peak])
         users_list << post[:user]
@@ -407,9 +411,7 @@ def do_replies(options = {})
   replies = reply_list(options)
   replies_network = network_hash(replies, options)
   reduced_replies_network = reduce(replies_network, options)
-  if !options[:window]
-    options[:edge_colors] = get_edge_colors(reduced_replies_network, options)
-  end
+  options[:edge_colors] = get_edge_colors(reduced_replies_network, options)
   save_network("replies", reduced_replies_network, options)
 end
 
@@ -450,10 +452,8 @@ def do_network(options = {})
       do_circle(options)
     end
   else
-    if !options[:window]
-      options[:colors] = get_user_colors()
-      options[:coordinates] = get_user_coordinates()
-    end
+    options[:colors] = get_user_colors()
+    options[:coordinates] = get_user_coordinates()
     if options[:network] == "shareds"
       do_shareds(options)
     else
@@ -462,10 +462,28 @@ def do_network(options = {})
   end
 end
 
+def do_permutation_test(options = {})
+  threads = get_threads(options)
+  options.merge!(:threads => threads)
+  next_file_number = PermutationTestStore.next_file_number
+  5000.times do |i|
+    puts "Permutation #{next_file_number + i}"
+    options[:permutation_test].randomize_windows
+    replies = reply_list(options)
+    replies_network = network_hash(replies, options)
+    ForumTools::File.save_pajek(
+        "x_random_window.#{sprintf("%05d", next_file_number + i)}.no_cuts",
+        replies_network, options)
+  end
+end
+
 overall_options = {}
 args = ARGV.to_a
 if args[0] == "window"
   overall_options[:window] = true
+  args.delete_at(0)
+elsif args[0] == "permutation"
+  overall_options[:permutation_test] = true
   args.delete_at(0)
 end
 if args[0] == "shareds"
@@ -498,6 +516,10 @@ if overall_options[:window]
     overall_options[:window] = i
     do_network(overall_options)
   end
+elsif overall_options[:permutation_test]
+  puts "## Networks from random windows"
+  overall_options[:permutation_test] = PermutationTestStore.new()
+  do_permutation_test(overall_options)
 else
   puts '## All'
   do_network(overall_options)

@@ -51,6 +51,7 @@ class OpenStructArray < Array
   end
 
   def items=(items)
+    self.clear_array
     items.each do |item|
       self << item
     end

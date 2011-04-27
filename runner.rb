@@ -47,8 +47,11 @@ class Runner
           "./networker.rb window [<environment>]",
           "./statter.rb [<environment>]"],
       :networks => [
-          "./networker.rb [<mode>] standard", # a hack
+          "./networker.rb [<mode>] standard",
           "./networker.rb [<mode>] standardmw"],
+      :permutation => [
+          "./networker.rb permutation [<environment>]",
+          "./statter.rb permutation [<environment>]"],
       :user => [
           "./production/user_scraper.rb [<environment>]",
           "./parser.rb user [<environment>]"]

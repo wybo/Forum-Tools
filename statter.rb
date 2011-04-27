@@ -28,8 +28,16 @@ def simple
   ForumTools::File.save_stat("width_for_each_thread",
       ["width"].concat(width_for_each_thread))
 
+  puts 'Time on frontpage for each threads'
+  time_on_frontpage_for_each_thread = []
+  threads.each do |thread|
+    time_on_frontpage = thread.off_frontpage_time - thread.on_frontpage_time
+    time_on_frontpage_for_each_thread << time_on_frontpage
+  end
+  ForumTools::File.save_stat("time_on_frontpage_for_each_thread",
+      ["width"].concat(width_for_each_thread))
+
   puts 'Posts for each user'
-  
   users = UsersStore.new()
   posts_for_each_user = users.collect {|user| user[:posts]}.sort.reverse
   ForumTools::File.save_stat("posts_for_each_user",
@@ -118,19 +126,18 @@ def per_user_over_time
   end
   sampled_posts_per_hour_for_each_prolific_user = ForumTools::Data.sample(
       posts_per_hour_for_each_prolific_user, 10)
-  ForumTools::File.save_stat("posts_per_hour_for_sampled_prolific_users",
-      columnize_users_hash(sampled_posts_per_hour_for_each_prolific_user),
-      :add_case_numbers => true)
+#  ForumTools::File.save_stat("posts_per_hour_for_sampled_prolific_users",
+#      columnize_users_hash(sampled_posts_per_hour_for_each_prolific_user),
+#      :add_case_numbers => true)
 
-  puts 'Timezoned posts per hour for prolific users'
+  puts 'Timezoned posts per hour for users'
   timezoned_posts_per_hour_for_each_user = {}
   timezoned_posts_per_hour_for_each_prolific_user = {}
   users.each do |user|
     if user[:timezone]
-      peak_window = TimeTools.timezone_align_window(user[:peak_window], user[:timezone],
-          times_for_each_user_hash[user[:name]][-1])
+      timezone_offset = TimeTools.timezone_offset(user[:timezone], times_for_each_user_hash[user[:name]][-1])
       hour_counts = posts_per_hour_for_each_user[user[:name]]
-      timezoned_hour_counts = hour_counts[(peak_window - 24)..-1].concat(hour_counts[0...peak_window])
+      timezoned_hour_counts = hour_counts[(timezone_offset - 24)..-1].concat(hour_counts[0...timezone_offset])
       timezoned_posts_per_hour_for_each_user[user[:name]] = timezoned_hour_counts
       if prolific_user_hash[user[:name]]
         timezoned_posts_per_hour_for_each_prolific_user[user[:name]] = timezoned_hour_counts
@@ -139,9 +146,9 @@ def per_user_over_time
   end
   sampled_timezoned_posts_per_hour_for_each_prolific_user = ForumTools::Data.sample(
       timezoned_posts_per_hour_for_each_prolific_user, 10)
-  ForumTools::File.save_stat("timezoned_posts_per_hour_for_sampled_prolific_users",
-      columnize_users_hash(sampled_timezoned_posts_per_hour_for_each_prolific_user),
-      :add_case_numbers => true)
+#  ForumTools::File.save_stat("timezoned_posts_per_hour_for_sampled_prolific_users",
+#      columnize_users_hash(sampled_timezoned_posts_per_hour_for_each_prolific_user),
+#      :add_case_numbers => true)
 
   puts 'Aggregate timezoned posts per hour'
   aggregate_timezoned_posts = []
@@ -158,9 +165,33 @@ def per_user_over_time
   ForumTools::File.save_stat("aggregate_timezoned_posts",
       ["posts"].concat(aggregate_timezoned_posts),
       :add_case_numbers => true)
+
+  puts 'Aggregate timezoned posts per hour for each timezone'
+  users_hash = users.hash()
+  timezoned_posts_per_hour_for_each_timezone = {}
+  timezoned_posts_per_hour_for_each_user.each_pair do |user, counts|
+    i = 0
+    counts.each do |count|
+      if !timezoned_posts_per_hour_for_each_timezone[users_hash[user][:timezone]]
+        timezoned_posts_per_hour_for_each_timezone[users_hash[user][:timezone]] = []
+      end
+      if !timezoned_posts_per_hour_for_each_timezone[users_hash[user][:timezone]][i]
+        timezoned_posts_per_hour_for_each_timezone[users_hash[user][:timezone]][i] = 0
+      end
+      timezoned_posts_per_hour_for_each_timezone[users_hash[user][:timezone]][i] += count
+      i += 1
+    end
+  end
+
+  timezoned_posts_per_hour_for_each_timezone.each_pair do |timezone, counts|
+    timezone_string = timezone.gsub("/", "_")
+    ForumTools::File.save_stat("aggregate_timezoned_posts_for_#{timezone_string}",
+        ["posts"].concat(counts),
+        :add_case_numbers => true)
+  end
 end
 
-def measures
+def post_time_distances
   puts "# Distance measures"
   puts "Time between posts and each reply"
   threads = ThreadStore.all()
@@ -189,7 +220,7 @@ def measures
       ["time"].concat(time_between_posts_and_each_reply))
 end
 
-def distances(options = {})
+def time_and_network_distances(options = {})
   puts "# Networks"
   puts "Pre-reading seconds of day at which posts are made"
 
@@ -224,7 +255,7 @@ def distances(options = {})
         base_name == "all_replies.replies_only.cut_reciprocity_3.max_fr_12.singl_pk_false.undr_true.net" or
         false
       network = NetworkStore.new(network_file)
-      reply_distance_between_users_hash = get_network_distances(network, network_file, options)
+      reply_distance_between_users_hash = get_network_distances(network.users, network_file, options)
 
       puts "Median circadian distance between users posts"
       reply_distance_between_users = []
@@ -270,30 +301,40 @@ def distances(options = {})
 end
 
 def daylight_saving_time
+  puts "Reading networks"
   network_before = read_dst_network("dst2weeksbefore")
   network_after = read_dst_network("dst2weeksafter")
-  reply_distance_between_users_before_hash =
-      get_network_distances(network_before, dst_pajek_file_dir_name("dst2weeksbefore"))
-  reply_distance_between_users_after_hash =
-      get_network_distances(network_after, dst_pajek_file_dir_name("dst2weeksafter"))
   users_before = network_before.users
-  puts users_before.size
+  users_after = network_after.users
+  network_before = nil
+  network_after = nil
+  reply_distance_between_users_before_hash =
+      get_network_distances(users_before, dst_pajek_file_dir_name("dst2weeksbefore"))
+  reply_distance_between_users_after_hash =
+      get_network_distances(users_after, dst_pajek_file_dir_name("dst2weeksafter"))
+
+  puts "Reading networks again"
+  network_before = read_dst_network("dst2weeksbefore")
+  network_after = read_dst_network("dst2weeksafter")
+
   users_hash = UsersStore.new().hash
   users_before.collect! {|u| users_hash[u] }
 
+  puts "Calculating"
   reply_distance_between_selected_users_before = []
   reply_distance_between_selected_users_after = []
-  puts users_before.size
   users_before.each do |user1|
+    print "."
     users_before.each do |user2|
       if (user2[:name] < user1[:name]) and 
           ((user1[:timezone] == "America/Los_Angeles" and user2[:country] == "UK") or
            (user1[:country] == "UK" and user2[:timezone] == "America/Los_Angeles")) and
-          (reply_distance_between_users_before_hash[user1[:name]][user2[:name]] and
+          (reply_distance_between_users_before_hash[user1[:name]] and
+           reply_distance_between_users_before_hash[user1[:name]][user2[:name]] and
            !reply_distance_between_users_before_hash[user1[:name]][user2[:name]].kind_of?(String)) and
-          (reply_distance_between_users_after_hash[user1[:name]][user2[:name]] and
+          (reply_distance_between_users_after_hash[user1[:name]] and
+           reply_distance_between_users_after_hash[user1[:name]][user2[:name]] and
            !reply_distance_between_users_after_hash[user1[:name]][user2[:name]].kind_of?(String))
-        puts "adding"
         reply_distance_between_selected_users_before << 
             reply_distance_between_users_before_hash[user1[:name]][user2[:name]]
         reply_distance_between_selected_users_after <<
@@ -301,6 +342,7 @@ def daylight_saving_time
       end
     end
   end
+  print "\n"
 
   puts "Before average: " + ForumTools::Data.average(reply_distance_between_selected_users_before).to_s
   puts "After average:" + ForumTools::Data.average(reply_distance_between_selected_users_after).to_s
@@ -311,18 +353,18 @@ def daylight_saving_time
   puts "Saved output"
 end
 
-def window_stats
-  puts "# Reciprocity and transitivity for windows"
+def network_stats
+  puts "## Reciprocity and transitivity"
+  puts "# For windows"
   reciprocities = []
   transitivities = []
   NetworkStore.all_pajek_file_names.sort.each do |network_file|
     base_name = File.basename(network_file)
     if base_name =~ /^wnd_/
       puts "Doing window " + base_name
-      reciprocity_transitivity = `helper_scripts/network_measures.r #{network_file}`
-      rec_tra_arr = reciprocity_transitivity.split(" ")
-      reciprocities << rec_tra_arr[0].to_f
-      transitivities << rec_tra_arr[1].to_f
+      rec_tra_arr = get_reciprocity_transitivity(network_file)
+      reciprocities << rec_tra_arr[0]
+      transitivities << rec_tra_arr[1]
     end
   end
 
@@ -339,9 +381,59 @@ def window_stats
 
   ForumTools::File.save_stat("max_window_transitivity", ["transitivity", transitivities.max])
   ForumTools::File.save_stat("min_window_transitivity", ["transitivity", transitivities.min])
+
+  puts "# For the whole network"
+
+  rec_tra_arr = get_reciprocity_transitivity(
+      ForumTools::CONFIG[:env_dir] + ForumTools::CONFIG[:net_dir] +
+      "all_replies.cut_false.max_fr_50.singl_pk_false.undr_false.net")
+  reciprocity = rec_tra_arr[0]
+  transitivity = rec_tra_arr[1]
+
+  ForumTools::File.save_stat("all_transitivity", ["transitivity", transitivity])
+  ForumTools::File.save_stat("all_reciprocity", ["reciprocity", reciprocity])
+end
+
+def permutation_test
+  puts "## Permutation test"
+  permutation_test = PermutationTestStore.new()
+  if !permutation_test.respond_to?(:original)
+    permutation_test.original = {:reciprocity => 0.113007, :transitivity => 0.0161657}
+  end
+  last_file = nil
+  PermutationTestStore.all_pajek_file_names.each do |network_file|
+    if PermutationTestStore.file_number(network_file) == permutation_test.size
+      print "."
+      rec_tra_arr = get_reciprocity_transitivity(network_file)
+      permutation_test << {:reciprocity => rec_tra_arr[0], :transitivity => rec_tra_arr[1]}
+      last_file = network_file
+    else
+      print "old file "
+    end
+  end
+  print "."
+  puts "Testing"
+  permutation_test.test()
+  permutation_test.save
+  results = permutation_test.results
+  puts results.inspect
+  puts "Removing permutation networks"
+  if last_file
+    PermutationTestStore.all_pajek_file_names.each do |network_file|
+      FileUtils.rm(network_file)
+    end
+  end
+  puts "Done"
 end
 
 ### Helper methods
+
+def get_reciprocity_transitivity(network_file)
+  reciprocity_transitivity = `helper_scripts/network_measures.r #{network_file}`
+  rec_tra_arr = reciprocity_transitivity.split(" ")
+  rec_tra_arr.collect! {|a| a.to_f}
+  return rec_tra_arr
+end
 
 def read_dst_network(environment)
   file_name = ForumTools::CONFIG[:root_dir] + environment + "/" +
@@ -358,12 +450,12 @@ def dst_pajek_file_name
   return "all_replies.cut_false.max_fr_50.singl_pk_false.undr_true.net"
 end
 
-def get_network_distances(network, pajek_file_name, options = {})
+def get_network_distances(users, pajek_file_name, options = {})
   puts "Network-distances between users"
-  users = network.users
   reply_distance_between_users_hash = {}
   matrix = `helper_scripts/shortest_distances.r #{pajek_file_name}`
   rows = matrix.split("\n")
+  matrix = ""
   rows.collect! { |r| r.strip.squeeze(" ").split(" ") }
   i = 0
   rows.each do |cells|
@@ -402,19 +494,23 @@ args = ARGV.to_a
 if args[0] == "dist"
   args.delete_at(0)
   initialize_environment(args)
-  distances(:hop_cutoff => ForumTools::CONFIG[:hop_cutoff])
+  time_and_network_distances(:hop_cutoff => ForumTools::CONFIG[:hop_cutoff])
 elsif args[0] == "dst"
   args.delete_at(0)
   initialize_environment(args)
   daylight_saving_time()
-elsif args[0] == "window"
+elsif args[0] == "network"
   args.delete_at(0)
   initialize_environment(args)
-  window_stats()
+  network_stats()
+elsif args[0] == "permutation"
+  args.delete_at(0)
+  initialize_environment(args)
+  permutation_test()
 else
   initialize_environment(args)
   simple()
   over_time()
   per_user_over_time()
-  measures()
+  post_time_distances()
 end

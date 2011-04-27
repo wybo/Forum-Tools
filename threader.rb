@@ -120,7 +120,47 @@ def get_threads(options = {})
 end
 
 def time_sort_threads(threads)
+  threads.collect! { |thread|
+    sorted_arrays = add_to_nested_sorted_arrays(0, 0, thread)
+    posts_list = peel_from_nested_arrays(sorted_arrays)
+    thread.items = posts_list
+    thread
+  }
   return threads
+end
+
+def add_to_nested_sorted_arrays(previous_indent_pointer, index, thread)
+  p_i_p = previous_indent_pointer
+  nested_arrays = []
+  i = index
+  while i < thread.size
+    post = thread[i]
+    if post[:indent] > p_i_p
+      nested_arrays << add_to_nested_sorted_arrays(post[:indent], i, thread)
+    elsif post[:indent] == p_i_p
+      nested_arrays << [post[:time], 1, post]
+    else
+      nested_arrays.sort! {|a, b| a[0] <=> b[0]}
+      i_counter = nested_arrays.inject(0) {|c,a| c + a[1]}
+      return [nested_arrays[0][0], i_counter].concat(nested_arrays)
+    end
+    i += nested_arrays[-1][1]
+  end
+  nested_arrays.sort! {|a, b| a[0] <=> b[0]}
+  i_counter = nested_arrays.inject(0) {|c,a| c + a[1]}
+  return [nested_arrays[0][0], i_counter].concat(nested_arrays)
+end
+
+def peel_from_nested_arrays(sorted_arrays)
+  list = []
+  sorted_arrays.each do |array_hash_or_int|
+    if array_hash_or_int.kind_of?(Array)
+      list.concat(peel_from_nested_arrays(array_hash_or_int))
+    elsif array_hash_or_int.kind_of?(Hash)
+      list << array_hash_or_int
+    end # drop if int = time
+  end
+  return list
 end
 
 def save_thread(file_infix, thread_array, options = {})
@@ -132,7 +172,7 @@ end
 
 def do_thread(options = {})
   threads = get_threads(options)
-  threads.reject! {|t| t.size < 40}
+#  threads.reject! {|t| t.size < 40}
   if options[:tsort]
     threads = time_sort_threads(threads)
   end
@@ -152,6 +192,7 @@ if args[0] == "tsort"
   args.delete_at(0)
 end
 if args[0] == "rating"
+  overall_options[:tsort] = true
   overall_options[:collect] = :rating
   args.delete_at(0)
 else

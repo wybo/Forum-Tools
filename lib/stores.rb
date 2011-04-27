@@ -78,7 +78,6 @@ class ThreadStore < Store
     elsif options.kind_of?(Hash)
       super(options[:file_name], options)
       if options[:array]
-        self.clear()
         self.items = options[:array]
       end
     elsif options.kind_of?(Integer)
@@ -166,7 +165,6 @@ class TimesStore < Store
   def initialize(options = {})
     super("times", :var => true)
     if options[:array]
-      self.clear()
       self.items = options[:array]
     end
   end
@@ -254,6 +252,72 @@ class UsersStore < Store
   def to_yaml
     self.sort! {|a,b| a[:name] <=> b[:name]}
     super
+  end
+end
+
+class PermutationTestStore < Store
+  def self.all_pajek_file_names
+    list = Dir.glob(ForumTools::CONFIG[:env_dir] + ForumTools::CONFIG[:net_dir] + "x_random_window.*.net")
+    return list.sort
+  end
+
+  def self.next_file_number
+    all_files = self.all_pajek_file_names
+    if !all_files.empty?
+      return self.file_number(all_files[-1]) + 1
+    else
+      store = PermutationTestStore.new()
+      return store.size
+    end
+  end
+
+  def self.file_number(file_name)
+    base_name = File.basename(file_name)
+    return base_name.split(".")[1].to_i
+  end
+
+  def initialize()
+    super("permutation_test", :var => true)
+    @end_time = (ForumTools::CONFIG[:samples][ForumTools::CONFIG[:environment].to_sym][:end_time] + 2.days).to_i
+    @days_span = TimeTools.day(@end_time)
+  end
+
+  def randomize_windows
+    @windows = []
+    no_goes = []
+    @days_span.times do |i|
+      @windows[i] = Kernel.rand(24)
+#      begin
+#        if i > 0
+#          no_goes = TimeTools::WINDOWS[@windows[i - 1]] # counts on 3-hour windows with core in center
+#        end
+#      end while no_goes.include?(@windows[i])
+    end
+  end
+
+  def test
+    counter_hash = {}
+    original_hash = self.original
+    original_hash.keys.each do |key|
+      counter_hash[key] = 0
+    end
+    self.each do |hash|
+      hash.keys.each do |key|
+        if hash[key] >= original_hash[key]
+          counter_hash[key] += 1
+        end
+      end
+    end
+    results_hash = {}
+    original_hash.keys.each do |key|
+      results_hash[key] = counter_hash[key] / self.size.to_f
+    end
+    self.results = results_hash.merge(:size => self.size)
+  end
+
+  def in_random_time_window(time)
+    window = @windows[TimeTools.day(time)]
+    return TimeTools.in_time_window(window, time)
   end
 end
 
