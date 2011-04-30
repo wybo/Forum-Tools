@@ -190,6 +190,12 @@ EOS
         <viz:position x="#{sprintf("%.4f", coordinates[0])}" y="#{sprintf("%.4f", coordinates[1])}"></viz:position>
 EOS
         end
+        if options[:weights]
+          size = (options[:weights][:gexf][user] + 1).to_f
+          chunks << <<-EOS
+        <viz:size value="#{size}"/>
+EOS
+        end
         chunks << <<-EOS
       </node>
 EOS
@@ -362,6 +368,54 @@ EOS
   end
 
   class Data
+    def self.matrix_string_to_hash(matrix, users, options = {})
+      between_users_hash = {}
+      rows = matrix.split("\n")
+      matrix = ""
+      rows.collect! { |r| r.strip.squeeze(" ").split(" ") }
+      i = 0
+      rows.each do |cells|
+        j = 0
+        cells.each do |cell|
+          if j < i
+            if !between_users_hash[users[i]]
+              between_users_hash[users[i]] = {}
+            end
+            if cell == "Inf"
+              cell = ""
+            else
+              cell = cell.to_f
+            end
+            if cell.kind_of?(Numeric) and options[:hop_cutoff] and cell > options[:hop_cutoff]
+              cell = ""
+            end
+            between_users_hash[users[i]][users[j]] = cell
+          end
+          j += 1
+        end
+        i += 1
+      end
+      return between_users_hash
+    end
+
+    def self.vector_string_to_hash(vector, users, options = {})
+      users_hash = {}
+      rows = vector.split("\n")
+      vector = ""
+      rows.collect! { |r| r.strip.squeeze(" ") }
+      i = 0
+      rows.each do |cell|
+        if cell == "Inf"
+          cell = ""
+        else
+          cell = cell.to_f
+        end
+        users_hash[users[i]] = cell
+        i += 1
+      end
+      return users_hash
+    end
+
     def self.get_unique_users(network_hash)
       users = []
       network_hash.each_pair do |user1, hash|

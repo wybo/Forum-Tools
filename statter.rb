@@ -452,34 +452,8 @@ end
 
 def get_network_distances(users, pajek_file_name, options = {})
   puts "Network-distances between users"
-  reply_distance_between_users_hash = {}
   matrix = `helper_scripts/shortest_distances.r #{pajek_file_name}`
-  rows = matrix.split("\n")
-  matrix = ""
-  rows.collect! { |r| r.strip.squeeze(" ").split(" ") }
-  i = 0
-  rows.each do |cells|
-    j = 0
-    cells.each do |cell|
-      if j < i
-        if !reply_distance_between_users_hash[users[i]]
-          reply_distance_between_users_hash[users[i]] = {}
-        end
-        if cell == "Inf"
-          cell = ""
-        else
-          cell = cell.to_i
-        end
-        if cell.kind_of?(Numeric) and options[:hop_cutoff] and cell > options[:hop_cutoff]
-          cell = ""
-        end
-        reply_distance_between_users_hash[users[i]][users[j]] = cell
-      end
-      j += 1
-    end
-    i += 1
-  end
-  return reply_distance_between_users_hash
+  return ForumTools::Data.matrix_string_to_hash(matrix, users, options)
 end
 
 def columnize_users_hash(user_hash)

@@ -30,9 +30,9 @@ def initialize_environment(args)
   ForumTools.config(:max_hours_on_frontpage => 50)
   ForumTools.config(:only_single_peak => false)
   ForumTools.config(:between_replies_only => false)
-  ForumTools.config(:undirected => false)
+  ForumTools.config(:undirected => true)
 
-  network = :interaction
+  network = :reciprocity
 
   if network == :test
     #ForumTools.config(:interaction_cutoff => 2)
@@ -48,6 +48,8 @@ def initialize_environment(args)
   elsif network == :reciprocity
     ForumTools.config(:reciprocity_cutoff => 3)
 #    ForumTools.config(:prolificity_prune => :unprolific)
+#    ForumTools.config(:node_weights => :betweenness)
+#    ForumTools.config(:single_peak_level => 3)
   elsif network == :interaction
     ForumTools.config(:interaction_cutoff => 6)
   end

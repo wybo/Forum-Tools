@@ -307,13 +307,13 @@ def get_window_colors
   return colors_hash
 end
 
-def get_user_colors
+def get_user_colors(options)
   colors_hash = {}
   colors_hash[:pajek] = {}
   colors_hash[:gexf] = {}
   users = UsersStore.new()
   users.each do |user|
-    if user[:single_peak]
+    if user[:single_peak] and (!options[:single_peak_level] or user[:single_peak] == options[:single_peak_level])
       colors_hash[:pajek][user[:name]] = TimeTools.pajek_color_window(user[:peak_window])
       colors_hash[:gexf][user[:name]] = TimeTools.wheel_color_window(user[:peak_window])
     else
@@ -399,6 +399,15 @@ def get_coordinates(window, name, coordinates_hash)
   return coordinates_hash
 end
 
+def get_node_weights(network_hash, file_name, options = {})
+  puts "Betweenness-centrality for users"
+  pajek_file_name = ForumTools::CONFIG[:env_dir] + ForumTools::CONFIG[:net_dir] +
+      ForumTools::File.set_extension(file_name, ".net")
+  matrix = `helper_scripts/betweenness_centrality.r #{pajek_file_name}`
+  network = NetworkStore.new(pajek_file_name)
+  return {:gexf => ForumTools::Data.vector_string_to_hash(matrix, network.users, options)}
+end
+
 def save_network(file_infix, network_hash, options = {})
   if options[:interaction_cutoff]
     cut = "interaction_" + options[:interaction_cutoff].to_s
@@ -419,13 +428,25 @@ def save_network(file_infix, network_hash, options = {})
   else
     between = ""
   end
-  options_string = "#{between}.cut_#{cut}.max_fr_#{options[:max_hours_on_frontpage].to_s}." +
-      "singl_pk_#{options[:only_single_peak].to_s}.undr_#{options[:undirected].to_s}"
-  if options[:window]
-    ForumTools::File.save_networks("wnd_#{sprintf("%02d", options[:window])}_#{file_infix}#{options_string}", network_hash, options)
+  if options[:node_weights]
+    node_weights = ".wghts_" + options[:node_weights].to_s
   else
-    ForumTools::File.save_networks("all_#{file_infix}#{options_string}", network_hash, options)
+    node_weights = ""
   end
+  if options[:single_peak_level]
+    single_peak_level = ".singl_pk_level" + options[:single_peak_level].to_s
+  else
+    single_peak_level = ""
+  end
+  options_string = "#{node_weights}#{between}.cut_#{cut}.max_fr_#{options[:max_hours_on_frontpage].to_s}." +
+      "singl_pk_#{options[:only_single_peak].to_s}#{single_peak_level}.undr_#{options[:undirected].to_s}"
+  if options[:window]
+    file_name = "wnd_#{sprintf("%02d", options[:window])}_#{file_infix}#{options_string}"
+  else
+    file_name = "all_#{file_infix}#{options_string}"
+  end
+  ForumTools::File.save_networks(file_name, network_hash, options)
+  return file_name
 end
 
 def reduce(network_hash, options = {})
@@ -462,6 +483,10 @@ def do_replies(options = {})
   replies_network = network_hash(replies, options)
   reduced_replies_network = reduce(replies_network, options)
   options[:edge_colors] = get_edge_colors(reduced_replies_network, options)
+  if options[:node_weights]
+    file_name = save_network("replies", reduced_replies_network, options)
+    options[:weights] = get_node_weights(reduced_replies_network, file_name, options)
+  end
   save_network("replies", reduced_replies_network, options)
 end
 
@@ -503,7 +528,7 @@ def do_network(options = {})
       do_circle(options)
     end
   else
-    options[:colors] = get_user_colors()
+    options[:colors] = get_user_colors(options)
     options[:coordinates] = get_user_coordinates()
     if options[:network] == "shareds"
       do_shareds(options)
@@ -558,7 +583,9 @@ overall_options.merge!(
     :max_hours_on_frontpage => ForumTools::CONFIG[:max_hours_on_frontpage],
     :only_single_peak => ForumTools::CONFIG[:only_single_peak],
     :undirected => ForumTools::CONFIG[:undirected],
-    :between_replies_only => ForumTools::CONFIG[:between_replies_only]
+    :between_replies_only => ForumTools::CONFIG[:between_replies_only],
+    :single_peak_level => ForumTools::CONFIG[:single_peak_level],
+    :node_weights => ForumTools::CONFIG[:node_weights]
 )
 
 if overall_options[:window]
