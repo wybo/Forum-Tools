@@ -139,8 +139,10 @@ class TimeTools
     posts_per_hour.each do |posts|
       overall_posts += posts
     end
-    if peak_posts * 4 > overall_posts
-      return true
+    if peak_posts * 3 > overall_posts
+      return 3
+    elsif peak_posts * 4 > overall_posts
+      return 4
     else
       return false
     end

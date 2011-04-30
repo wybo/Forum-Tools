@@ -32,7 +32,7 @@ def initialize_environment(args)
   ForumTools.config(:between_replies_only => false)
   ForumTools.config(:undirected => false)
 
-  network = :window
+  network = :interaction
 
   if network == :test
     #ForumTools.config(:interaction_cutoff => 2)
@@ -49,7 +49,7 @@ def initialize_environment(args)
     ForumTools.config(:reciprocity_cutoff => 3)
 #    ForumTools.config(:prolificity_prune => :unprolific)
   elsif network == :interaction
-    ForumTools.config(:interaction_cutoff => 4)
+    ForumTools.config(:interaction_cutoff => 6)
   end
 
   # For regression

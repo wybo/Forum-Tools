@@ -160,6 +160,19 @@ def posts_circle_network_hash(network_hash, options = {})
   return posts_circle
 end
 
+def dup_network(network_hash)
+  new_network_hash = {}
+  network_hash.keys.each do |user1|
+    network_hash[user1].keys.each do |user2|
+      if !new_network_hash[user1]
+        new_network_hash[user1] = {}
+      end
+      new_network_hash[user1][user2] = network_hash[user1][user2]
+    end
+  end
+  return new_network_hash
+end
+
 def undirect(network_hash)
   network_hash.keys.sort.each do |user1|
     network_hash[user1].keys.sort.each do |user2|
@@ -210,6 +223,18 @@ def reciprocity_prune(network_hash)
   network_hash.keys.each do |user1|
     network_hash[user1].keys.each do |user2|
       if !network_hash[user2] or !network_hash[user2][user1]
+        network_hash[user1].delete(user2)
+      end
+    end
+  end
+  return delete_empty_hashes(network_hash)
+end
+
+def non_duplicate_prune(network_hash, remaining_network_hash)
+  network_hash.keys.each do |user1|
+    network_hash[user1].keys.each do |user2|
+      if (!remaining_network_hash[user1] or !remaining_network_hash[user1][user2]) and 
+         (!remaining_network_hash[user2] or !remaining_network_hash[user2][user1])
         network_hash[user1].delete(user2)
       end
     end
@@ -294,6 +319,25 @@ def get_user_colors
     else
       colors_hash[:pajek][user[:name]] = TimeTools.pajek_color_window(24) # the grey
       colors_hash[:gexf][user[:name]] = TimeTools.wheel_color_window(24)
+    end
+  end
+  return colors_hash
+end
+
+def get_edge_window_colors
+  colors_hash = {}
+  colors_hash[:pajek] = {}
+  colors_hash[:gexf] = {}
+  TimeTools::WHEEL_COLORS.size.times do |i|
+    TimeTools::WHEEL_COLORS.size.times do |j|
+      if !colors_hash[:pajek][i]
+        colors_hash[:pajek][i] = {}
+      end
+      colors_hash[:pajek][i][j] = TimeTools.pajek_color_window(j)
+      if !colors_hash[:gexf][i]
+        colors_hash[:gexf][i] = {}
+      end
+      colors_hash[:gexf][i][j] = TimeTools.wheel_color_window(j)
     end
   end
   return colors_hash
@@ -386,10 +430,16 @@ end
 
 def reduce(network_hash, options = {})
   if options[:interaction_cutoff]
-    if options[:network] != "shareds" and options[:undirected] # undirected before cutoff
-      network_hash = undirect(network_hash) 
+    if options[:network] == "shareds" or !options[:undirected] # undirected before cutoff
+      original_network_hash = dup_network(network_hash)
+    else
+      original_network_hash = nil
     end
+    network_hash = undirect(network_hash) 
     network_hash = cutoff_prune(network_hash, options[:interaction_cutoff])
+    if original_network_hash
+      network_hash = non_duplicate_prune(original_network_hash, network_hash)
+    end
   elsif options[:reciprocity_cutoff]
     network_hash = cutoff_prune(network_hash, options[:reciprocity_cutoff])
     network_hash = reciprocity_prune(network_hash)
@@ -445,6 +495,7 @@ end
 def do_network(options = {})
   if options[:network] == "circle" or options[:network] == "posts_circle"
     options[:colors] = get_window_colors()
+    options[:edge_colors] = get_edge_window_colors()
     options[:coordinates] = get_window_coordinates()
     if options[:network] == "posts_circle"
       do_posts_circle(options)

@@ -51,12 +51,14 @@ def summarize_matrix(matrix, options = {})
     row.collect! {|cell|
       if cell
         if options[:collect] == :time
-          cell = ForumTools::Data.peak_window(cell) # array of times
+          cell = TimeTools.peak_window(cell) # array of times
    #       cell = ForumTools::Data.median(cell) # array of times
         else
           cell = ForumTools::Data.average(cell) # array of rating scores
         end
         values << cell
+      else
+        cell = nil
       end
       cell
     }
@@ -80,21 +82,6 @@ def summarize_matrix(matrix, options = {})
   return matrix
 end
 
-def colorize_matrix(matrix, options = {})
-  puts '# Coloring matrix'
-  matrix.collect! {|row|
-    row.collect! {|cell|
-      if cell
-        colors = TimeTools.wheel_color_window(cell) # window
-        cell = "#%02x%02x%02x" % colors
-      else
-        cell = nil
-      end
-    }
-  }
-  return matrix
-end
-
 def unpack_to_thread(matrix, options = {})
   puts '# Unpacking to thread'
   diag_i = 0
@@ -105,7 +92,7 @@ def unpack_to_thread(matrix, options = {})
     j = init_j
     if matrix[i] 
       while matrix[i] and matrix[i][j]
-        thread_array << {:indent => j, :color => matrix[i][j] }
+        thread_array << {:indent => j, :value => matrix[i][j]}
         i += 1
         j += 1
       end
@@ -113,6 +100,16 @@ def unpack_to_thread(matrix, options = {})
     end
   end
   return thread_array
+end
+
+def colorize_thread(thread, options = {})
+  puts '# Coloring thread'
+  thread.collect! {|post|
+    colors = TimeTools.wheel_color_window(post[:value]) # window
+    post[:color] = "#%02x%02x%02x" % colors
+    post
+  }
+  return thread
 end
 
 def get_threads(options = {})
@@ -163,35 +160,78 @@ def peel_from_nested_arrays(sorted_arrays)
   return list
 end
 
+def select_original_threads(threads)
+  selected_threads = []
+  while selected_threads.size < 3
+    thread = threads.choice
+    if thread.size > 17 and thread.size < 21
+    #if thread.size > 8 and thread.size < 12
+      thread.collect! {|post|
+        post[:value] = TimeTools.hour(post[:time] - thread[0][:time])
+        post
+      }
+      selected_threads << thread
+    end
+  end
+  return selected_threads
+end
+
 def save_thread(file_infix, thread_array, options = {})
   puts '# Saving thread'
-  options_string = ".tsort_#{options[:tsort].to_s}." + "collect_#{options[:collect].to_s}"
+  if !options[:colorize]
+    no_colorize = ".colorize_false"
+  else
+    no_colorize = ""
+  end
+  options_string = ".tsort_#{options[:tsort].to_s}." + "collect_#{options[:collect].to_s}#{no_colorize}"
   thread = ThreadStore.new(:file_name => "#{file_infix}#{options_string}", :array => thread_array)
-  thread.save_json(:variable => "thread" + options_string.gsub(".", "_"))
+  thread.save_json(:variable => file_infix + options_string.gsub(".", "_"))
+end
+
+def do_original_threads(threads, options = {})
+  selected_threads = select_original_threads(threads)
+  i = 0
+  selected_threads.each do |thread|
+    if options[:colorize]
+      thread = colorize_thread(thread, options)
+    end
+    save_thread("original_#{i}", thread, options)
+    i += 1
+  end
 end
 
 def do_thread(options = {})
   threads = get_threads(options)
-#  threads.reject! {|t| t.size < 40}
-  if options[:tsort]
-    threads = time_sort_threads(threads)
+  if options[:collect] == :original
+    do_original_threads(threads, options)
+  else
+  #  threads.reject! {|t| t.size < 40}
+    if options[:tsort]
+      threads = time_sort_threads(threads)
+    end
+    thread_matrix = thread_matrix(threads, options)
+    pruned_matrix = prune_matrix(thread_matrix, options)
+    summary_matrix = summarize_matrix(pruned_matrix, options)
+    summary_thread = unpack_to_thread(summary_matrix)
+    if options[:colorize]
+      summary_thread = colorize_thread(summary_thread, options)
+    end
+    save_thread("thread", summary_thread, options)
   end
-  thread_matrix = thread_matrix(threads, options)
-  pruned_matrix = prune_matrix(thread_matrix, options)
-  summary_matrix = summarize_matrix(pruned_matrix, options)
-  colored_matrix = colorize_matrix(summary_matrix, options)
-  colored_thread = unpack_to_thread(colored_matrix)
-  save_thread("thread_heat_map", colored_thread, options)
 end
 
 overall_options = {}
 overall_options[:tsort] = false
+overall_options[:colorize] = true
 args = ARGV.to_a
 if args[0] == "tsort"
   overall_options[:tsort] = true
   args.delete_at(0)
 end
-if args[0] == "rating"
+if args[0] == "original"
+  overall_options[:collect] = :original
+  args.delete_at(0)
+elsif args[0] == "rating"
   overall_options[:tsort] = true
   overall_options[:collect] = :rating
   args.delete_at(0)
