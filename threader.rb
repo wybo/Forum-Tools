@@ -34,11 +34,12 @@ def prune_matrix(matrix, options = {})
   puts '# Pruning thread matrix'
   matrix.collect! {|row|
     row.collect! {|cell|
-      if cell and cell.size >= 5 # array
+      if cell and cell.size >= 3 # array
         cell
       else
-        nil
+        cell = nil
       end
+      cell
     }
   }
   return matrix
@@ -205,7 +206,7 @@ def do_thread(options = {})
   if options[:collect] == :original
     do_original_threads(threads, options)
   else
-  #  threads.reject! {|t| t.size < 40}
+    threads.reject! {|t| t.size < 20}
     if options[:tsort]
       threads = time_sort_threads(threads)
     end

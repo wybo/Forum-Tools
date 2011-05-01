@@ -193,13 +193,18 @@ end
 
 def post_time_distances
   puts "# Distance measures"
-  puts "Time between posts and each reply"
+  puts "Time between replies"
+  puts "Average rating after time"
+  puts "Number of replies per level"
   threads = ThreadStore.all()
-  time_between_posts_and_each_reply = []
+  hours_between_replies = []
+  average_rating_after_hours = []
+  average_rating_per_level = []
   indent_stack = []
   indent_pointer = 0
   last_indent_pointer = 0
   threads.each do |thread|
+    start_time = thread[0][:time]
     thread.each do |post|
       last_indent_pointer = indent_pointer
       indent_pointer = post[:indent]
@@ -210,14 +215,48 @@ def post_time_distances
       while indent_stack[indent_pointer - 1][:id] > post[:id] and indent_pointer > 0 # if posts are deleted without gap, such as indent 1
         indent_pointer -= 1
       end
-      if indent_pointer > 1 # only between replies
-        difference = post[:time] - indent_stack[indent_pointer - 1][:time]
-        time_between_posts_and_each_reply << difference
+      if indent_pointer > 0 # both between story and replies and between replies
+        last_post = indent_stack[indent_pointer - 1]
+        if indent_pointer > 1 # only between replies
+          # Time between
+          difference = ((post[:time] - last_post[:time]) / 3600.0).to_i
+          if !hours_between_replies[difference]
+            hours_between_replies[difference] = 0
+          end
+          hours_between_replies[difference] += 1
+        end
+        last_post = indent_stack[indent_pointer - 1]
+        # Average rating
+        since_thread = ((post[:time] - start_time) / 3600.0).to_i
+        if !average_rating_after_hours[since_thread]
+          average_rating_after_hours[since_thread] = []
+        end
+        average_rating_after_hours[since_thread] << post[:rating]
+        # Rating per level
+        level = post[:indent]
+        if !average_rating_per_level[level]
+          average_rating_per_level[level] = []
+        end
+        average_rating_per_level[level] << post[:rating]
       end
     end
   end
-  ForumTools::File.save_stat("time_between_posts_and_each_reply",
-      ["time"].concat(time_between_posts_and_each_reply))
+  ForumTools::File.save_stat("hours_between_replies",
+      ["posts"].concat(hours_between_replies),
+      :add_case_numbers => true)
+  average_rating_after_hours.collect! {|times|
+    if times
+      ForumTools::Data.average(times)
+    else
+      nil
+    end
+  }
+  ForumTools::File.save_stat("average_rating_after_hours",
+      ["rating"].concat(average_rating_after_hours),
+      :add_case_numbers => true)
+  ForumTools::File.save_stat("average_rating_per_level",
+      ["rating"].concat(average_rating_per_level),
+      :add_case_numbers => true)
 end
 
 def time_and_network_distances(options = {})
