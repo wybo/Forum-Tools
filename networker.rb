@@ -343,8 +343,7 @@ def get_edge_window_colors
   return colors_hash
 end
 
-def get_edge_colors(network_hash, options = {})
-  edge_windows = edge_windows(network_hash, options)
+def get_edge_colors(network_hash, edge_windows, options = {})
   colors_hash = {}
   colors_hash[:pajek] = {}
   colors_hash[:gexf] = {}
@@ -363,6 +362,21 @@ def get_edge_colors(network_hash, options = {})
     end
   end
   return colors_hash
+end
+
+def get_edge_times(network_hash, edge_windows, options = {})
+  times_hash = {}
+  users = UsersStore.new()
+  network_hash.keys.each do |user1|
+    network_hash[user1].keys.each do |user2|
+      peak_window = edge_windows[user1][user2]
+      if !times_hash[user1]
+        times_hash[user1] = {}
+      end
+      times_hash[user1][user2] = {:start => (peak_window * 3600), :end => ((peak_window + 2) * 3600)}
+    end
+  end
+  return times_hash
 end
 
 def get_window_coordinates
@@ -482,7 +496,9 @@ def do_replies(options = {})
   replies = reply_list(options)
   replies_network = network_hash(replies, options)
   reduced_replies_network = reduce(replies_network, options)
-  options[:edge_colors] = get_edge_colors(reduced_replies_network, options)
+  edge_windows = edge_windows(reduced_replies_network, options)
+  options[:edge_colors] = get_edge_colors(reduced_replies_network, edge_windows, options)
+  options[:edge_times] = get_edge_times(reduced_replies_network, edge_windows, options)
   if options[:node_weights]
     file_name = save_network("replies", reduced_replies_network, options)
     options[:weights] = get_node_weights(reduced_replies_network, file_name, options)

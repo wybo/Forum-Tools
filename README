@@ -1,0 +1,54 @@
+= Forum-Tools
+  "Untangles every thread"
+
+Toolset for analysing forum-data. Currently Hacker News specifically,
+but a (limited) parser for {the SIOC format}[http://sioc-project.org] 
+is being added.
+
+Forum-Tools is still a bit rough around the edges, but should be 
+working, and be operable by someone with basic Ruby knowledge.
+
+== Usage
+
+Set the :root_dir in config.rb before usage.
+
+The scripts are ran using the runner.rb script, though they can be
+invoked directly as well.
+
+./runner.rb -l lists all available tasks
+
+./runner.rb -h shows some help-information
+
+=== Important scripts
+* config.rb config-settings for all scripts
+* networker.rb generates the social networks from .yaml corpus files
+  such as the HN corpus.
+* runner.rb runs the other scripts
+* sampler.rb allows you to take a subset from the data, such as
+  weekdays, or only the first week
+* statter.rb takes various descriptive and other statistics from the
+  yaml data
+
+=== Miscellaneous scripts:
+* anonymizer.rb anonymizes the data, which is already done for the
+  HN corpus.
+* arrower.rb adds SVG arrows to .svg files created by Gephi. So this
+  script will most often not be used.
+* parser.rb parses html files fetched from HN.
+* threader.rb generates threads and average karma-ratings for all
+  threads in .json format to be used with the agent-based-forum (see
+  github)
+
+There are also a few libraries in lib, and some R-scripts in the
+helper_scripts directory.
+
+Gephi, NodeXL and Pajek can be used to open the generated network
+files (.gexf, .graphml, .net, respectively).
+
+== Copyrights
+
+Forum-Tools and these docs are Copyright (c) 2011 Wybo Wiersma. 
+Forum-Tools is licensed under the {Affero General Public 
+License}[http://www.gnu.org/licenses/agpl.html]. These docs are 
+available under the {Creative Commons Attribution-Share Alike 
+License}[http://creativecommons.org/licenses/by-sa/3.0/].

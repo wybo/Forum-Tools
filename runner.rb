@@ -42,7 +42,7 @@ class Runner
 
   TASKS = {
       :prepare => [
-          "./parser.rb [<environment>]",
+          "./hn_parser.rb [<environment>]",
           "./networker.rb [<environment>]",
           "./networker.rb window [<environment>]",
           "./statter.rb [<environment>]"],
@@ -54,7 +54,7 @@ class Runner
           "./statter.rb permutation [<environment>]"],
       :user => [
           "./production/user_scraper.rb [<environment>]",
-          "./parser.rb user [<environment>]"]
+          "./hn_parser.rb user [<environment>]"]
   }
   TASKS[:full] = TASKS[:prepare].dup.concat(TASKS[:user])
   TASKS[:sample] = ["./sampler.rb [<environment>]"].dup.concat(TASKS[:prepare])

@@ -3,7 +3,8 @@ require 'open_struct_array'
 class Store < OpenStructArray
   def self.all(class_const, file_regexp)
     return super(class_const, 
-        ForumTools::CONFIG[:env_dir] + ForumTools::CONFIG[:yaml_dir] + file_regexp)
+        ForumTools::CONFIG[:env_dir] + ForumTools::CONFIG[:yaml_dir],
+        file_regexp)
   end
 
   def initialize(file_name, options = {})
@@ -58,7 +59,7 @@ end
 
 class ThreadStore < Store
   def self.all
-    return Store.all(ThreadStore, "thread*")
+    return Store.all(ThreadStore, "**/thread*")
   end
 
   def self.max_hours_on_frontpage(max_hours)

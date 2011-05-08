@@ -28,14 +28,18 @@ def simple
   ForumTools::File.save_stat("width_for_each_thread",
       ["width"].concat(width_for_each_thread))
 
-  puts 'Time on frontpage for each threads'
-  time_on_frontpage_for_each_thread = []
+  puts 'Time on frontpage for each thread'
+  hours_on_frontpage_for_each_thread = []
   threads.each do |thread|
-    time_on_frontpage = thread.off_frontpage_time - thread.on_frontpage_time
-    time_on_frontpage_for_each_thread << time_on_frontpage
+    hours_on_frontpage = ((thread.off_frontpage_time - thread.on_frontpage_time) / 3600.0).to_i
+    if !hours_on_frontpage_for_each_thread[hours_on_frontpage]
+      hours_on_frontpage_for_each_thread[hours_on_frontpage] = 0
+    end
+    hours_on_frontpage_for_each_thread[hours_on_frontpage] += 1
   end
-  ForumTools::File.save_stat("time_on_frontpage_for_each_thread",
-      ["width"].concat(width_for_each_thread))
+  ForumTools::File.save_stat("hours_on_frontpage_for_each_thread",
+      ["threads"].concat(hours_on_frontpage_for_each_thread),
+      :add_case_numbers => true)
 
   puts 'Posts for each user'
   users = UsersStore.new()
@@ -96,6 +100,86 @@ def over_time
   posts_for_each_day = TimeTools.per_period_adder(times, "day")
   ForumTools::File.save_stat("posts_for_each_day",
       ["posts"].concat(posts_for_each_day),
+      :add_case_numbers => true)
+end
+
+def threads_over_time
+  puts '# Threads over time'
+  threads = ThreadStore.all()
+  # Created here is the first time they appear on the homepage
+  puts 'Average size per hour created'
+  puts 'Average hours on frontpage per hour created'
+  threads_average_size_per_hour_created = []
+  threads_average_hours_on_frontpage_per_hour_created = []
+  threads.each do |thread|
+    hour_created = TimeTools.hour(thread.on_frontpage_time)
+    if !threads_average_size_per_hour_created[hour_created]
+      threads_average_size_per_hour_created[hour_created] = []
+    end
+    threads_average_size_per_hour_created[hour_created] << thread.size.to_f
+    if !threads_average_hours_on_frontpage_per_hour_created[hour_created]
+      threads_average_hours_on_frontpage_per_hour_created[hour_created] = []
+    end
+    hours_on_frontpage = ((thread.off_frontpage_time - thread.on_frontpage_time) / 3600.0)
+    threads_average_hours_on_frontpage_per_hour_created[hour_created] << hours_on_frontpage
+  end
+  threads_average_size_per_hour_created = collect_averages(threads_average_size_per_hour_created)
+  ForumTools::File.save_stat("threads_average_size_per_hour_created",
+      ["posts"].concat(threads_average_size_per_hour_created),
+      :add_case_numbers => true)
+  threads_average_hours_on_frontpage_per_hour_created = collect_averages(
+      threads_average_hours_on_frontpage_per_hour_created)
+  ForumTools::File.save_stat("threads_average_hours_on_frontpage_per_hour_created",
+      ["hours"].concat(threads_average_hours_on_frontpage_per_hour_created),
+      :add_case_numbers => true)
+end
+
+def ratings_over_time
+  puts "# Ratings over time"
+  puts "Average rating for comments per hour"
+  puts "Average rating for threads per hour"
+  puts "Average rating for comments per hour per weekday"
+  average_comment_rating_per_hour = []
+  average_thread_rating_per_hour = []
+  average_comment_rating_per_hour_per_weekday = []
+  threads = ThreadStore.all()
+  threads.each do |thread|
+    start_time = thread[0][:time]
+    thread.each do |post|
+      # Hourly
+      hour = TimeTools.hour(post[:time])
+      if post[:indent] == 0
+        if !average_thread_rating_per_hour[hour]
+          average_thread_rating_per_hour[hour] = []
+        end
+        average_thread_rating_per_hour[hour] << post[:rating]
+      else
+        if !average_comment_rating_per_hour[hour]
+          average_comment_rating_per_hour[hour] = []
+        end
+        average_comment_rating_per_hour[hour] << post[:rating]
+      end
+      # Hour per week
+      week_hour = TimeTools.week_hour(post[:time])
+      if post[:indent] > 0
+        if !average_comment_rating_per_hour_per_weekday[week_hour]
+          average_comment_rating_per_hour_per_weekday[week_hour] = []
+        end
+        average_comment_rating_per_hour_per_weekday[week_hour] << post[:rating]
+      end
+    end
+  end
+  average_comment_rating_per_hour = collect_averages(average_comment_rating_per_hour)
+  ForumTools::File.save_stat("average_comment_rating_per_hour",
+      ["rating"].concat(average_comment_rating_per_hour),
+      :add_case_numbers => true)
+  average_thread_rating_per_hour = collect_averages(average_thread_rating_per_hour)
+  ForumTools::File.save_stat("average_thread_rating_per_hour",
+      ["rating"].concat(average_thread_rating_per_hour),
+      :add_case_numbers => true)
+  average_comment_rating_per_hour_per_weekday = collect_averages(average_comment_rating_per_hour_per_weekday)
+  ForumTools::File.save_stat("average_comment_rating_per_hour_per_weekday",
+      ["rating"].concat(average_comment_rating_per_hour_per_weekday),
       :add_case_numbers => true)
 end
 
@@ -244,13 +328,7 @@ def post_time_distances
   ForumTools::File.save_stat("hours_between_replies",
       ["posts"].concat(hours_between_replies),
       :add_case_numbers => true)
-  average_rating_after_hours.collect! {|times|
-    if times
-      ForumTools::Data.average(times)
-    else
-      nil
-    end
-  }
+  average_rating_after_hours = collect_averages(average_rating_after_hours)
   ForumTools::File.save_stat("average_rating_after_hours",
       ["rating"].concat(average_rating_after_hours),
       :add_case_numbers => true)
@@ -277,19 +355,7 @@ def time_and_network_distances(options = {})
   differences_store = TimeDifferencesStore.new()
   NetworkStore.all_pajek_file_names.each do |network_file|
     base_name = File.basename(network_file)
-    #if base_name == "all_replies.cut_false.max_fr_50.singl_pk_false.undr_true.net"
-    #if base_name == "all_replies.cut_reciprocity_3.max_fr_50.singl_pk_false.undr_true.net" or
-      #  base_name == "all_replies.cut_unprolific_5.max_fr_50.singl_pk_false.undr_true.net"
     if false or
-#        base_name == "all_replies.cut_interaction_4.max_fr_50.singl_pk_false.undr_true.net" or
-#        base_name == "all_replies.cut_reciprocity_2.max_fr_50.singl_pk_false.undr_true.net" or
-#        base_name == "all_replies.cut_unprolific_5.max_fr_50.singl_pk_false.undr_true.net" or
-#        base_name == "all_replies.cut_reciprocity_1.max_fr_50.singl_pk_false.undr_true.net" or
-#        base_name == "all_replies.cut_reciprocity_1.unprolific_15.max_fr_50.singl_pk_false.undr_true.net" or
-#        base_name == "all_replies.cut_reciprocity_1.unprolific_5.max_fr_50.singl_pk_false.undr_true.net" or
-#        base_name == "all_replies.cut_reciprocity_3.max_fr_8.singl_pk_false.undr_true.net" or
-#        base_name == "all_replies.cut_unprolific_5.max_fr_8.singl_pk_false.undr_true.net" or
-#        base_name == "all_replies.cut_reciprocity_3.max_fr_12.singl_pk_false.undr_true.net" or
 #        base_name == "all_replies.replies_only.cut_reciprocity_2.max_fr_12.singl_pk_false.undr_true.net" or
         base_name == "all_replies.replies_only.cut_reciprocity_3.max_fr_12.singl_pk_false.undr_true.net" or
         false
@@ -477,7 +543,7 @@ end
 def read_dst_network(environment)
   file_name = ForumTools::CONFIG[:root_dir] + environment + "/" +
       ForumTools::CONFIG[:var_dir] + dst_pajek_file_name()
-  return NetworkStore.new(file_name, :keep_path => true)
+  return NetworkStore.new(file_name, :keep_full_path => true)
 end
 
 def dst_pajek_file_dir_name(environment)
@@ -503,6 +569,19 @@ def columnize_users_hash(user_hash)
   return columns
 end
 
+def collect_averages(array)
+  array.collect! {|items|
+    if items
+      ForumTools::Data.average(items)
+    else
+      nil
+    end
+  }
+  return array
+end
+
+### Initialization
+
 args = ARGV.to_a
 if args[0] == "dist"
   args.delete_at(0)
@@ -524,6 +603,8 @@ else
   initialize_environment(args)
   simple()
   over_time()
+  threads_over_time()
+  ratings_over_time()
   per_user_over_time()
   post_time_distances()
 end

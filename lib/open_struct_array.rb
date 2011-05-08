@@ -1,14 +1,17 @@
 require 'json'
 
 class OpenStructArray < Array
-  def self.all(class_const, glob_dir_file_name)
-    file_names = Dir.glob(glob_dir_file_name)
+  def self.all(class_const, glob_dir_name, glob_dir_file_expression)
+    file_names = Dir.glob(glob_dir_name + glob_dir_file_expression).sort # for SIOC pages
     list = []
     file_names.each do |file_name|
-      print "."
-      instance = class_const.new(File.basename(file_name))
-      if instance
-        list.push(instance)
+      if File.file?(file_name)
+        print "."
+        file_name = file_name.gsub(/^#{glob_dir_name}/,"")
+        instance = class_const.new(file_name)
+        if instance
+          list.push(instance)
+        end
       end
     end
     print "\n"

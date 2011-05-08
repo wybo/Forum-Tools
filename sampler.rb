@@ -36,7 +36,7 @@ end
 def after_parse_sample(options = {})
   puts "# Selecting yaml files"
   list = []
-  file_names = Dir.glob(ForumTools::CONFIG[:production_dir] +
+  file_names = Dir.glob(ForumTools::CONFIG[:febmar_dir] +
       ForumTools::CONFIG[:yaml_dir] + "*")
   file_names.each do |file_name|
     base_name = File.basename(file_name)
@@ -78,15 +78,22 @@ def link_raw
   end
 end
 
+overall_options = {}
 args = ARGV.to_a
 if args[0] == "after"
   args.delete_at(0)
-  initialize_environment(args)
+  overall_options[:sample] = :after
+end
+
+initialize_environment(args)
+
+if overall_options[:sample] == :after
   list = after_parse_sample(ForumTools::CONFIG[:samples][ForumTools::CONFIG[:environment].to_sym])
   populate(list, ForumTools::CONFIG[:yaml_dir])
   link_raw()
 else
-  initialize_environment(args)
   list = sample(ForumTools::CONFIG[:samples][ForumTools::CONFIG[:environment].to_sym])
   populate(list, ForumTools::CONFIG[:raw_dir])
 end
+
+initialize_environment(args)

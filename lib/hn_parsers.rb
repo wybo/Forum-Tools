@@ -8,10 +8,13 @@ require 'open_struct_array'
 class HNParser < OpenStructArray
   def self.all(class_const, file_regexp)
     super(class_const,
-        ForumTools::CONFIG[:env_dir] + ForumTools::CONFIG[:raw_dir] + file_regexp)
+        ForumTools::CONFIG[:env_dir] + ForumTools::CONFIG[:raw_dir],
+        file_regexp)
   end
 
   def initialize(file_name)
+    file_name = file_name.gsub(
+        ForumTools::CONFIG[:env_dir] + ForumTools::CONFIG[:raw_dir], "")
     super(file_name)
     set_save_time()
     return self
@@ -78,11 +81,11 @@ class HNThreadParser < HNParser
     if thread_title
       self.title_string = thread_title.content.to_s.strip
       if @title_string =~ /^Poll/
-        self.type = "poll"
+        self.type = :poll
       elsif @title_string =~ /^Ask/
-        self.type = "ask"
+        self.type = :ask
       else
-        self.type = "normal"
+        self.type = :normal
       end
     else # deleted thread
       return false

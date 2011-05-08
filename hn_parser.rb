@@ -1,6 +1,6 @@
 #!/usr/bin/ruby
 require 'config'
-require 'parsers'
+require 'hn_parsers'
 require 'stores'
 require 'time_tools'
 

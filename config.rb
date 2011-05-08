@@ -3,6 +3,9 @@ $stdout.sync = true # For progress dots
 require 'forum_tools'
 
 def initialize_environment(args)
+  # Overall root
+  ForumTools.config(:root_dir => "/home/wybo/projects/hnscraper/")
+
   # Time the sample starts
   ForumTools.config(:data_start_time => Time.utc(2011,"jan",31))
 
@@ -30,7 +33,7 @@ def initialize_environment(args)
   ForumTools.config(:max_hours_on_frontpage => 50)
   ForumTools.config(:only_single_peak => false)
   ForumTools.config(:between_replies_only => false)
-  ForumTools.config(:undirected => true)
+  ForumTools.config(:undirected => false)
 
   network = :reciprocity
 
@@ -49,16 +52,13 @@ def initialize_environment(args)
     ForumTools.config(:reciprocity_cutoff => 3)
 #    ForumTools.config(:prolificity_prune => :unprolific)
 #    ForumTools.config(:node_weights => :betweenness)
-#    ForumTools.config(:single_peak_level => 3)
+    ForumTools.config(:single_peak_level => 3)
   elsif network == :interaction
     ForumTools.config(:interaction_cutoff => 6)
   end
 
   # For regression
   ForumTools.config(:hop_cutoff => 20)
-
-  # Overall root
-  ForumTools.config(:root_dir => "/home/wybo/projects/hnscraper/")
 
   # The root dir normally used in the scripts
   ForumTools.config(:env_dir => ForumTools::CONFIG[:root_dir] + ForumTools::CONFIG[:environment] + "/")

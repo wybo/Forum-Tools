@@ -22,18 +22,20 @@ class TimeTools
   PAJEK_NO_SINGLE_PEAK = "Grey"
   PAJEK_COLORS << PAJEK_NO_SINGLE_PEAK
 
+  LIGHTENER = 0
+  MAX_COLOR = 255 - LIGHTENER
   WHEEL_PART_PART = []
   4.times do |i|
-    WHEEL_PART_PART << (255 / 4.0).ceil * i
+    WHEEL_PART_PART << LIGHTENER + (MAX_COLOR / 4.0).ceil * i
   end
   8.times do
-    WHEEL_PART_PART << 255
+    WHEEL_PART_PART << LIGHTENER + MAX_COLOR
   end
   4.times do |i|
-    WHEEL_PART_PART << 255 - (255 / 4.0).ceil * i
+    WHEEL_PART_PART << LIGHTENER + MAX_COLOR - (MAX_COLOR / 4.0).ceil * i
   end
   8.times do
-    WHEEL_PART_PART << 0
+    WHEEL_PART_PART << LIGHTENER
   end
   WHEEL_PART = WHEEL_PART_PART.concat(WHEEL_PART_PART)
   WHEEL_COLORS = []
@@ -152,6 +154,11 @@ class TimeTools
     offset = TZInfo::Timezone.get(timezone_string).period_for_utc(post_time).utc_total_offset / 3600
     offset = offset * -1
     return offset
+  end
+
+  def self.week_hour(time)
+    hour = self.hour(time)
+    return Time.at(time).utc.wday * 24 + hour
   end
 
   def self.hour(time)

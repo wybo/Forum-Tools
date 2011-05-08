@@ -48,7 +48,11 @@ class ForumTools
     end
 
     def self.save_yaml(file_prefix, structure, options = {})
-      open(self.yaml_dir_file_name(file_prefix, options), "w") { |file| 
+      y_dir_file_name = self.yaml_dir_file_name(file_prefix, options)
+      if y_dir_file_name =~ /\//
+        FileUtils.mkdir_p(::File.dirname(y_dir_file_name))
+      end
+      open(y_dir_file_name, "w") { |file| 
           file.write(structure.to_yaml) }
     end
 
@@ -83,7 +87,7 @@ class ForumTools
     end
 
     def self.save_stat(file_prefix, array, options = {})
-      file_name = self.set_extension(file_prefix, ".raw")
+      file_name = self.set_extension(file_prefix, ".raw", options)
       if options[:add_case_numbers]
         if array[0].kind_of?(Array)
           array.insert(0,["case"].concat((array[0].size - 1).times.to_a))
@@ -154,7 +158,7 @@ class ForumTools
           lines << "#{users_hash[user1].to_s} #{users_hash[user2].to_s} #{weight.to_s}"
         end
       end
-      file_name = self.set_extension(file_prefix, ".net")
+      file_name = self.set_extension(file_prefix, ".net", options)
       open(CONFIG[:env_dir] + CONFIG[:net_dir] + file_name, "w") { |file|
           file.write(lines.join("\n") + "\n") }
     end
@@ -208,17 +212,22 @@ EOS
       network_hash.keys.sort.each do |user1|
         network_hash[user1].keys.sort.each do |user2|
           weight = network_hash[user1][user2]
-            chunks << <<-EOS
-      <edge id="#{i.to_s}" source="#{users_hash[user1]}" target="#{users_hash[user2]}" weight="#{weight}">
+          if options[:edge_times]
+            times = " start=\"#{options[:edge_times][user1][user2][:start]}\" end=\"#{options[:edge_times][user1][user2][:end]}\""
+          else
+            times = ""
+          end
+          chunks << <<-EOS
+      <edge id="#{i.to_s}" source="#{users_hash[user1]}" target="#{users_hash[user2]}" weight="#{weight}"#{times}>
         <attvalues></attvalues>
 EOS
-        if options[:edge_colors]
-          colors = options[:edge_colors][:gexf][user1][user2]
-          chunks << <<-EOS
+          if options[:edge_colors]
+            colors = options[:edge_colors][:gexf][user1][user2]
+            chunks << <<-EOS
         <viz:color r="#{colors[0]}" g="#{colors[1]}" b="#{colors[2]}" a="0.8"></viz:color>
 EOS
-        end
-      chunks << <<-EOS
+          end
+          chunks << <<-EOS
       </edge>
 EOS
           i += 1
@@ -229,7 +238,7 @@ EOS
   </graph>
 </gexf>
 EOS
-      file_name = self.set_extension(file_prefix, ".gexf")
+      file_name = self.set_extension(file_prefix, ".gexf", options)
       open(CONFIG[:env_dir] + CONFIG[:net_dir] + file_name, "w") { |file|
           file.write(chunks.join()) }
     end
@@ -333,27 +342,31 @@ EOS
   </graph>
 </graphml>
 EOS
-      file_name = self.set_extension(file_prefix, ".graphml")
+      file_name = self.set_extension(file_prefix, ".graphml", options)
       open(CONFIG[:env_dir] + CONFIG[:net_dir] + file_name, "w") { |file|
           file.write(chunks.join()) }
     end
 
     ### Helpers
 
-    def self.set_extension(file_prefix, extension)
-      return ::File.basename(file_prefix, extension) + extension
+    def self.set_extension(file_prefix, extension, options = {})
+      subdir = ::File.dirname(file_prefix) + "/"
+      if subdir == "."
+        subdir = ""
+      end
+      return subdir + ::File.basename(file_prefix, extension) + extension
     end
 
     def self.json_dir_file_name(file_prefix, options)
-      file_name = self.set_extension(file_prefix, ".json.js")
+      file_name = self.set_extension(file_prefix, ".json.js", options)
       return CONFIG[:abf_dir] + file_name
     end
 
     def self.yaml_dir_file_name(file_prefix, options)
-      if options[:keep_path]
+      if options[:keep_full_path]
         return file_prefix
       end
-      file_name = self.set_extension(file_prefix, ".yaml")
+      file_name = self.set_extension(file_prefix, ".yaml", options)
       if options[:env_dir]
         env_dir = options[:env_dir]
       else
