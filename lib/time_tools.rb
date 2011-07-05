@@ -3,9 +3,6 @@ require 'tzinfo'
 require 'active_support/all'
 
 class TimeTools
-  CONFIG = {} 
-  CONFIG[:data_start_time] = Time.gm(2011, "feb", 1)
-
   WINDOWS = []
   WINDOWS << [23, 0, 1]
   (0..21).each do |i|
@@ -54,7 +51,7 @@ class TimeTools
     end
   end
 
-  def self.windows(time)
+  def self.windows(time, options = {})
     hour = TimeTools.hour(time)
     return WINDOWS[hour] # real in middle 1 => [0,1,2]
   end
@@ -109,15 +106,17 @@ class TimeTools
     return ["ic", PAJEK_COLORS[window], "bc", PAJEK_COLORS[window]]
   end
 
-  def self.per_period_adder(times, period_string)
-    x_for_each_y = []
-    if period_string == "hour" or period_string == "windows" or period_string == "echo_hour" # needed for hour alignments
-      24.times do |i|
-        x_for_each_y[i] = 0
-      end
+  def self.per_period_adder(times, period_string, options = {})
+    if options[:start_time]
+      x_for_each_y = Array.new(TimeTools.send(
+          period_string, options[:end_time], options) + 1) { 0 }
+    elsif period_string == "hour" or period_string == "windows"
+      x_for_each_y = Array.new(24) { 0 }
+    elsif period_string == "day"
+      x_for_each_y = Array.new(7) { 0 }
     end
     times.each do |time|
-      periods = TimeTools.send(period_string, time)
+      periods = TimeTools.send(period_string, time, options)
       if !periods.kind_of?(Array)
         periods = [periods]
       end
@@ -161,7 +160,7 @@ class TimeTools
     return Time.at(time).utc.wday * 24 + hour
   end
 
-  def self.hour(time)
+  def self.hour(time, options = {})
     return Time.at(time).utc.hour
   end
 
@@ -170,12 +169,23 @@ class TimeTools
     return time - Time.utc(time_obj.year, time_obj.month, time_obj.day).to_i
   end
 
-  def self.day(time)
+  def self.day(time, options = {})
     time_object = Time.at(time).utc
-    if time_object.year != TimeTools::CONFIG[:data_start_time].year
-      raise 'Need updating for inter-year days'
+    if options[:start_time]
+      time_object = time_object.beginning_of_day()
+      return ((time_object.to_i - options[:start_time]) / 86400.0).to_i
+    else
+      return time_object.wday
     end
-    return time_object.yday - TimeTools::CONFIG[:data_start_time].yday
+  end
+
+  def self.week(time, options = {})
+    if options[:start_time]
+      time_object = Time.at(time).utc.beginning_of_week()
+      return ((time_object.to_i - options[:start_time]) / 604800.0).to_i
+    else
+      raise 'Needs start time'
+    end
   end
 
   def self.circadian_difference(difference)

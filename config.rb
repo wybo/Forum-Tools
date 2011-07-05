@@ -8,6 +8,7 @@ def initialize_environment(args)
 
   # Time the sample starts
   ForumTools.config(:data_start_time => Time.utc(2011,"jan",31))
+  # Used by permutation test
 
   # Environment set as argument
   if args[0].nil?
@@ -20,11 +21,13 @@ def initialize_environment(args)
   ForumTools.config(:samples => {
       :test => {:start_time => Time.utc(2011,"feb",2), :end_time => Time.utc(2011,"feb",4)},
       :febmar => {:end_time => Time.utc(2011,"apr",2)},
+      :febmay => {:end_time => Time.utc(2011,"jun",2)},
       :febmarmw => {:days => [2,3]},
       :standard => {:end_time => Time.utc(2011,"mar",12)},
       :standardmw => {:days => [2,3], :end_time => Time.utc(2011,"mar",12)},
       :dst2weeksbefore => {:start_time => Time.utc(2011,"feb",28), :end_time => Time.utc(2011,"mar",11)},
-      :dst2weeksafter => {:start_time => Time.utc(2011,"mar",14), :end_time => Time.utc(2011,"mar",25)}
+      :dst2weeksafter => {:start_time => Time.utc(2011,"mar",14), :end_time => Time.utc(2011,"mar",25)},
+      :ftest => {:select => 3}
   })
 
   ForumTools.config(:prolific_cutoff => (ForumTools::CONFIG[:environment] == "test" ? 3 : 25))
@@ -66,6 +69,7 @@ def initialize_environment(args)
   # Production data dir, used by sampler as source dir
   ForumTools.config(:production_dir => ForumTools::CONFIG[:root_dir] + "production/")
   ForumTools.config(:febmar_dir => ForumTools::CONFIG[:root_dir] + "febmar/")
+  ForumTools.config(:boards_dir => ForumTools::CONFIG[:root_dir] + "boards/")
 
   # Var
   ForumTools.config(:data_dir => "data/")

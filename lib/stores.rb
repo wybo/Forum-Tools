@@ -1,10 +1,12 @@
 require 'open_struct_array'
 
 class Store < OpenStructArray
-  def self.all(class_const, file_regexp)
+  alias :array_delete :delete
+
+  def self.all(class_const, file_regexp, &block)
     return super(class_const, 
         ForumTools::CONFIG[:env_dir] + ForumTools::CONFIG[:yaml_dir],
-        file_regexp)
+        file_regexp, &block)
   end
 
   def initialize(file_name, options = {})
@@ -58,8 +60,12 @@ class HashStore < Hash
 end
 
 class ThreadStore < Store
-  def self.all
-    return Store.all(ThreadStore, "**/thread*")
+  def self.all(forum_name = nil, &block)
+    if forum_name and forum_name.to_sym == :all
+      forum_name = nil
+    end
+    forum_name ||= "**"
+    return Store.all(ThreadStore, forum_name + "/thread*", &block)
   end
 
   def self.max_hours_on_frontpage(max_hours)
@@ -88,8 +94,93 @@ class ThreadStore < Store
     end
   end
 
+  def hash
+    hash = {}
+    self.each do |post|
+      hash[post[:id]] = post
+    end
+    return hash
+  end
+
   def save_json(options = {})
     ForumTools::File.save_json(@file_name, self, options)
+  end
+end
+
+class ForumsStore < Store
+  def self.all_forum_names()
+    file_names = OpenStructArray.all_file_names(ForumTools::CONFIG[:env_dir] + ForumTools::CONFIG[:yaml_dir], "*")
+    dir_names = []
+    file_names.each do |file_name|
+      if File.directory?(file_name)
+        dir_names << File.basename(file_name)
+      end
+    end
+    return dir_names
+  end
+
+  def initialize()
+    super("forums")
+    @start_time
+    @end_time
+  end
+
+  def start_time()
+    if !@start_time
+      @start_time = Time.now.to_i
+      self.each do |forum|
+        if forum[:start_time] < @start_time
+          @start_time = forum[:start_time]
+        end
+      end
+    end
+    return @start_time
+  end
+
+  def end_time()
+    if !@end_time
+      @end_time = 0
+      self.each do |forum|
+        if forum[:end_time] > @end_time
+          @end_time = forum[:end_time]
+        end
+      end
+    end
+    return @end_time
+  end
+
+  def largest(number)
+    array = []
+    self.each do |forum|
+      if (forum[:rank] < number)
+        array << forum
+      end
+    end
+    return array
+  end
+
+  def smallest(number)
+    array = []
+    number = self.size - number
+    self.each do |forum|
+      if (forum[:rank] >= number)
+        array << forum
+      end
+    end
+    return array
+  end
+
+  def hash
+    hash = {}
+    self.each do |user|
+      hash[user[:name]] = user
+    end
+    return hash
+  end
+
+  def to_yaml
+    self.sort! {|a,b| a[:name] <=> b[:name]}
+    super
   end
 end
 
@@ -211,6 +302,10 @@ class TimesStore < Store
 end
 
 class UsersStore < Store
+  def self.user_replies(user)
+    return user[:posts] - user[:threads]
+  end
+
   def initialize()
     super("users")
   end
@@ -234,6 +329,14 @@ class UsersStore < Store
     return array
   end
 
+  def prolificity_hash(prolific)
+    hash = {}
+    self.prolificity(prolific).each do |user|
+      hash[user[:name]] = 1
+    end
+    return hash
+  end
+
   def prolific_hash
     return self.prolificity_hash(true)
   end
@@ -242,10 +345,12 @@ class UsersStore < Store
     return self.prolificity_hash(false)
   end
 
-  def prolificity_hash(prolific)
+  def posted_once_hash
     hash = {}
-    self.prolificity(prolific).each do |user|
-      hash[user[:name]] = 1
+    self.each do |user|
+      if user[:posts] == 1
+        hash[user[:name]] = 1
+      end
     end
     return hash
   end
@@ -280,7 +385,7 @@ class PermutationTestStore < Store
   def initialize()
     super("permutation_test", :var => true)
     @end_time = (ForumTools::CONFIG[:samples][ForumTools::CONFIG[:environment].to_sym][:end_time] + 2.days).to_i
-    @days_span = TimeTools.day(@end_time)
+    @days_span = TimeTools.day(@end_time, :start_time => ForumTools::CONFIG[:data_start_time])
   end
 
   def randomize_windows
@@ -317,7 +422,7 @@ class PermutationTestStore < Store
   end
 
   def in_random_time_window(time)
-    window = @windows[TimeTools.day(time)]
+    window = @windows[TimeTools.day(time, :start_time => ForumTools::CONFIG[:data_start_time])]
     return TimeTools.in_time_window(window, time)
   end
 end

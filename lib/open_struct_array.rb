@@ -1,8 +1,8 @@
 require 'json'
 
 class OpenStructArray < Array
-  def self.all(class_const, glob_dir_name, glob_dir_file_expression)
-    file_names = Dir.glob(glob_dir_name + glob_dir_file_expression).sort # for SIOC pages
+  def self.all(class_const, glob_dir_name, glob_dir_file_expression, &block)
+    file_names = OpenStructArray.all_file_names(glob_dir_name, glob_dir_file_expression)
     list = []
     file_names.each do |file_name|
       if File.file?(file_name)
@@ -10,12 +10,25 @@ class OpenStructArray < Array
         file_name = file_name.gsub(/^#{glob_dir_name}/,"")
         instance = class_const.new(file_name)
         if instance
-          list.push(instance)
+          if block_given?
+            yield instance
+          else
+            list.push(instance)
+          end
         end
       end
     end
     print "\n"
-    return list
+    if block_given?
+      return true
+    else
+      return list
+    end
+  end
+
+  def self.all_file_names(glob_dir_name, glob_dir_file_expression)
+    # sorted for SIOC pages
+    return Dir.glob(glob_dir_name + glob_dir_file_expression).sort 
   end
 
   def initialize(file_name)

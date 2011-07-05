@@ -116,7 +116,12 @@ def parse_users
   puts '# Parsing users'
   puts 'from stores'
   times_for_each_user_hash = {}
+  threads_for_each_user_hash = {}
   ThreadStore.all.each do |thread|
+    if !threads_for_each_user_hash[thread[0][:user]]
+      threads_for_each_user_hash[thread[0][:user]] = 0
+    end
+    threads_for_each_user_hash[thread[0][:user]] += 1
     thread.each do |post|
       if !times_for_each_user_hash[post[:user]]
         times_for_each_user_hash[post[:user]] = []
@@ -162,6 +167,7 @@ def parse_users
     end
     user[:name] = name
     user[:posts] = times.size
+    user[:threads] = threads_for_each_user_hash[name] || 0
     user[:peak_window] = peak_window
     user[:single_peak] = TimeTools.single_peak(peak_window, posts_per_hour_for_each_user[name])
     if timezone_for_each_user_hash[name]
@@ -175,6 +181,41 @@ def parse_users
   store.save
 end
 
+def parse_forums
+  puts '# Parsing forums'
+  puts 'Only one forum'
+  threads = 0
+  posts = 0
+  start_time = Time.now.to_i
+  end_time = 0
+  users_hash = {}
+  ThreadStore.all() do |thread|
+    threads += 1
+    if thread[0][:time] < start_time
+      start_time = thread[0][:time]
+    end
+    thread.each do |post|
+      posts += 1
+      users_hash[post[:user]] = 1
+      if post[:time] > end_time
+        end_time = post[:time]
+      end
+    end
+  end
+  store = ForumsStore.new()
+  store.clear()
+  forum = {}
+  forum[:name] = "1"
+  forum[:threads] = threads || 0
+  forum[:posts] = posts
+  forum[:start_time] = start_time
+  forum[:end_time] = end_time
+  forum[:users] = users_hash.keys.size || 0
+  forum[:rank] = 1
+  store << forum
+  store.save
+end
+
 def parse_all
   parse_threads()
   parse_all_times()
@@ -183,6 +224,7 @@ def parse_all
   set_on_frontpage_times()
   prune()
   parse_users()
+  parse_forums()
 end
 
 args = ARGV.to_a

@@ -49,9 +49,13 @@ class HNParser < OpenStructArray
       if data[:id]
         line =~ /^((-|)\d+)/
         points = $1
-        raise 'Missing score in file ' + @file_name + ': ' + line if !points
-        data[:rating] = points.to_i
-        line =~ /(\d+\s+\w+\s+ago)\s+\|/
+        if !points
+          puts 'Missing score in file ' + @file_name + ': ' + line
+          data[:rating] = nil
+        else
+          data[:rating] = points.to_i
+        end
+        line =~ /(\d+\s+\w+\s+ago).*?\|/
         time_ago = $1
         raise 'Missing time in file ' + @file_name + ': ' + line if !time_ago
         data[:time_string] = time_ago
@@ -96,23 +100,40 @@ class HNThreadParser < HNParser
     self[i].merge!(parse_title_line(title_line))
     i += 1
 
+    deleted_at_indents = []
+    indent_substractor = 0
     doc.css('table table table').each do |post|
       space_img = post.at_css('td>img')
-      self[i] = {}
       if space_img
-        self[i][:indent] = space_img[:width].to_s.to_i / 40 + 1
+        raw_indent = space_img[:width].to_s.to_i / 40 + 1
       else
-        self[i][:indent] = 0
+        raw_indent = 1
       end
+      below_indents = deleted_at_indents.select {|d| d >= raw_indent}
+      indent_substractor -= below_indents.size
+      below_indents.each do |d|
+        deleted_at_indents.delete(d)
+      end
+      adjusted_indent = raw_indent - indent_substractor
       body = post.at_css('td.default')
       if body
         title_line = body.at_css('span.comhead')
         title_hash = parse_title_line(title_line)
         if title_hash
-          self[i].merge!(parse_title_line(title_line))
-          i += 1
-        else # post was deleted or is part of poll
-          self.pop
+          while adjusted_indent - 1 > self[i - 1][:indent]
+            indent_substractor += 1
+            adjusted_indent -= 1
+            deleted_at_indents << adjusted_indent
+          end
+          if adjusted_indent > 0
+            self[i] = {}
+            self[i][:indent] = adjusted_indent
+            self[i].merge!(parse_title_line(title_line))
+            i += 1
+          end
+        else
+          indent_substractor += 1
+          deleted_at_indents << adjusted_indent
         end
       end
     end

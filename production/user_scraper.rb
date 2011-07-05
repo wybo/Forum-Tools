@@ -1,7 +1,8 @@
 #!/usr/bin/ruby
+File.expand_path(File.dirname(__FILE__) + "../")
 require 'config.rb'
 require 'stores'
-require 'parsers'
+require 'hn_parsers'
 
 initialize_environment(ARGV)
 

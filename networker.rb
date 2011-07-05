@@ -17,7 +17,6 @@ def reply_list(options = {})
   reply_array = []
   indent_stack = []
   indent_pointer = 0
-  last_indent_pointer = 0
   if options[:only_single_peak]
     users_hash = UsersStore.new().hash()
   end
@@ -34,12 +33,8 @@ def reply_list(options = {})
   end
   threads.each do |thread|
     thread.each do |post|
-      last_indent_pointer = indent_pointer
       indent_pointer = post[:indent]
       indent_stack[indent_pointer] = post
-      if indent_pointer > last_indent_pointer + 1 # fill gap due to a delete
-        indent_stack[indent_pointer - 1] = indent_stack[last_indent_pointer]
-      end
       if indent_pointer > minimum_pointer
         previous_post = indent_stack[indent_pointer - 1]
         if (!options[:window] or TimeTools.in_time_window(options[:window], post[:time])) and
@@ -131,16 +126,11 @@ def posts_circle_network_hash(network_hash, options = {})
   posts_circle = {}
   indent_stack = []
   indent_pointer = 0
-  last_indent_pointer = 0
   threads = get_threads(options)
   threads.each do |thread|
     thread.each do |post|
-      last_indent_pointer = indent_pointer
       indent_pointer = post[:indent]
       indent_stack[indent_pointer] = post
-      if indent_pointer > last_indent_pointer + 1 # fill gap due to a delete
-        indent_stack[indent_pointer - 1] = indent_stack[last_indent_pointer]
-      end
       if indent_pointer > 0
         previous_post = indent_stack[indent_pointer - 1]
         if network_hash[previous_post[:user]] and network_hash[previous_post[:user]][post[:user]]
@@ -264,16 +254,11 @@ def edge_windows(network_hash, options = {})
   edge_times = {}
   indent_stack = []
   indent_pointer = 0
-  last_indent_pointer = 0
   threads = get_threads(options)
   threads.each do |thread|
     thread.each do |post|
-      last_indent_pointer = indent_pointer
       indent_pointer = post[:indent]
       indent_stack[indent_pointer] = post
-      if indent_pointer > last_indent_pointer + 1 # fill gap due to a delete
-        indent_stack[indent_pointer - 1] = indent_stack[last_indent_pointer]
-      end
       if indent_pointer > 0
         previous_post = indent_stack[indent_pointer - 1]
         if network_hash[previous_post[:user]] and network_hash[previous_post[:user]][post[:user]]

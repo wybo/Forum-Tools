@@ -10,7 +10,10 @@ working, and be operable by someone with basic Ruby knowledge.
 
 == Usage
 
-Set the :root_dir in config.rb before usage.
+You will need Linux or another POSIX based system (Mac) to run the
+scripts as they are.
+
+The :root_dir in config.rb needs to be set before usage.
 
 The scripts are ran using the runner.rb script, though they can be
 invoked directly as well.

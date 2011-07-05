@@ -88,9 +88,16 @@ class ForumTools
 
     def self.save_stat(file_prefix, array, options = {})
       file_name = self.set_extension(file_prefix, ".raw", options)
+      if array.kind_of?(Hash)
+        hash = array
+        array = []
+        hash.keys.sort.each do |header|
+          array << [header].concat(hash[header])
+        end
+      end 
       if options[:add_case_numbers]
         if array[0].kind_of?(Array)
-          array.insert(0,["case"].concat((array[0].size - 1).times.to_a))
+          array = [["case"].concat((array[0].size - 1).times.to_a)].concat(array)
         else
           array = [["case"].concat((array.size - 1).times.to_a), array]
         end
