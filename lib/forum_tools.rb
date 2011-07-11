@@ -91,8 +91,8 @@ class ForumTools
       if array.kind_of?(Hash)
         hash = array
         array = []
-        hash.keys.sort.each do |header|
-          array << [header].concat(hash[header])
+        hash.keys.sort {|a,b| a.to_s <=> b.to_s }.each do |header|
+          array << [header.to_s].concat(hash[header])
         end
       end 
       if options[:add_case_numbers]

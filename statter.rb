@@ -201,18 +201,42 @@ def left_after_one_post
   users = UsersStore.new()
   posted_once_hash = users.posted_once_hash()
   left_after_one_post_counter = 0
+  left_after_one_post_with_reply_counter = 0
   forums = ForumsStore.new()
   cutoff = forums.end_time - ARRIVALS_LEAVERS_GRACE;
-  ThreadStore.all do |thread|
-    thread.each do |post|
-      if posted_once_hash[post[:user]] and post[:time] < cutoff
-        left_after_one_post_counter += 1
+  threads = ThreadStore.all()
+  time_sorted_posts = get_time_sorted_posts(threads)
+  received_reply_hash = {}
+  time_sorted_posts.each do |post|
+    received_reply_hash[post[:prompted_by_user]] = true
+  end
+  time_sorted_posts.each do |post|
+    if posted_once_hash[post[:user]] and post[:time] < cutoff
+      if received_reply_hash[post[:user]]
+        left_after_one_post_with_reply_counter += 1
       end
+      left_after_one_post_counter += 1
     end
   end
   left_after_one_post_fraction = (left_after_one_post_counter * 1.0) / users.size
+  left_after_one_post_with_reply_fraction = (left_after_one_post_with_reply_counter * 1.0) / users.size
   ForumTools::File.save_stat("left_after_one_post", ["users", left_after_one_post_counter])
   ForumTools::File.save_stat("left_after_one_post_fraction", ["fraction", left_after_one_post_fraction])
+  ForumTools::File.save_stat("left_after_one_post_with_reply", ["users", left_after_one_post_with_reply_counter])
+  ForumTools::File.save_stat("left_after_one_post_with_reply_fraction", ["fraction", left_after_one_post_with_reply_fraction])
+end
+
+def replies_received_by_prompts
+  threads = ThreadStore.all()
+  time_sorted_posts = get_time_sorted_posts(threads)
+  received_reply_hash = {}
+  time_sorted_posts.each do |post|
+    received_reply_hash[post[:prompted_by_id]] = true
+  end
+  received_reply_counter = received_reply_hash.keys.size
+  replies_received_by_prompts_fraction = (received_reply_counter * 1.0) / time_sorted_posts.size
+  ForumTools::File.save_stat("replies_received_by_prompts", ["users", received_reply_counter])
+  ForumTools::File.save_stat("replies_received_by_prompts_fraction", ["fraction", replies_received_by_prompts_fraction])
 end
 
 def arrivals_leavers_over_time
@@ -358,18 +382,23 @@ def distance_between_posts
   else
     forum_names = [:all]
   end
-  total_posts_counter = 0
+  total_sessions_counter = 0
+  xin_sessions_counter = 0
   distance_array = []
+  distance_after_received_reply_array = []
   forum_names.each do |forum_name|
     threads = ThreadStore.all(forum_name)
     per_user_posts_index_hash = get_per_user_posts_index_hash(threads)
-    threads.each do |thread|
-      thread.each do |post|
-        total_posts_counter += 1
+    received_reply_hash = {}
+    time_sorted_posts = get_time_sorted_posts(threads)
+    time_sorted_posts.each do |post|
+      if post[:prompted_by_id]
+        received_reply_hash[post[:prompted_by_id]] = true
       end
     end
     per_user_posts_index_hash.keys.each do |user|
       index_array = per_user_posts_index_hash[user]
+      in_session = false
       if index_array.size > 1
         index_array.sort! {|a, b| a[:time] <=> b[:time]}
         index_array.size.times do |i|
@@ -380,7 +409,19 @@ def distance_between_posts
               if last_index[:thread] > index[:thread] or (last_index[:thread] == index[:thread] and last_index[:index] > index[:index])
                 last_index, index = index, last_index
               end
-              distance_array << calculate_distance_between_indices(threads, last_index, index)
+              distance = calculate_distance_between_indices(threads, last_index, index)
+              if received_reply_hash[last_index[:id]]
+                distance_after_received_reply_array << distance
+              end
+              distance_array << distance
+              if !in_session
+                xin_sessions_counter += 1
+                total_sessions_counter += 1
+              end
+              in_session = true
+            else
+              in_session = false
+              total_sessions_counter += 1
             end
           end
         end
@@ -389,9 +430,43 @@ def distance_between_posts
   end
   ForumTools::File.save_stat("distance_between_posts",
       {"distance" => distance_array})
-  xin_session_posts_fraction = (distance_array.size * 1.0) / total_posts_counter
-  ForumTools::File.save_stat("distance_between_posts_xin_session_posts_fraction",
-      ["posts", xin_session_posts_fraction])
+  ForumTools::File.save_stat("distance_between_posts_after_received_reply",
+      {"distance" => distance_after_received_reply_array})
+  xin_session_posts_fraction = (xin_sessions_counter * 1.0) / total_sessions_counter
+  ForumTools::File.save_stat("distance_between_posts_xin_sessions_fraction",
+      ["fraction", xin_session_posts_fraction])
+
+  distances_fraction_array = add_up_and_fraction_distances(distance_array, 200)
+  distances_after_reply_fraction_array = add_up_and_fraction_distances(distance_after_received_reply_array, 200)
+  boost_array = []
+  i = 0
+  distances_after_reply_fraction_array.each do |d_a_f|
+    if i > 0 # distances were counted as of 1, with 1 meaning no distance
+      if distances_fraction_array[i] > 0
+        boost_array[i - 1] = d_a_f / distances_fraction_array[i]
+      else
+        boost_array[i - 1] = 0
+      end
+    end
+    i += 1
+  end
+
+  ForumTools::File.save_stat("distance_between_posts_after_received_reply_chance_increase",
+      {"fraction" => boost_array},
+      :add_case_numbers => true)
+end
+
+def add_up_and_fraction_distances(distance_array, cap)
+  fraction_array = []
+  fraction_array[cap] = 0.0 # to set size
+  fraction_array.collect! {|c| c || 0.0}
+  distance_array.each do |distance|
+    if distance <= 200
+      fraction_array[distance] += 1.0
+    end
+  end
+  fraction_array.collect! {|c| c / distance_array.size}
+  return fraction_array
 end
 
 def get_per_user_posts_index_hash(threads)
@@ -403,9 +478,8 @@ def get_per_user_posts_index_hash(threads)
       if !per_user_posts_index_hash[post[:user]]
         per_user_posts_index_hash[post[:user]] = []
       end
-      per_user_posts_index_hash[post[:user]] << {:index => i, :thread => t, :time => post[:time]}
+      per_user_posts_index_hash[post[:user]] << {:index => i, :thread => t, :time => post[:time], :id => post[:id]}
       i += 1
-      total_posts_counter += 1
     end
     t += 1
   end
@@ -517,62 +591,98 @@ end
 
 def replying_tie_strength
   puts '## Replying per tie strength'
-  threads = ThreadStore.all()
-  time_sorted_posts = get_time_sorted_posts(threads)
   cap = 25
-  # Simple
-  total_counter = 0
+  tie_strength_counter_hash = {} # tracks number of replies made
   # Additive, adds total & replies at that time
-  totaled_at_reply_prompting_users_posts_counter = 0
-  totaled_total_posts_counter = 0
-  per_user_posts_counter_hash = {}
-  replies_counter_hash = {} # tracks number of replies made
   per_tie_strength_counter_hash = {
-      "replies" => [],
-      "replies_as_fractions" => [],
-      "available_prompts_as_fractions" => [],
-      "replies_over_odds" => [],
-      "prompter_expected" => [],
-      "prompter_odds" => [],
+      :replies => [],
+      :replies_as_fractions => [],
+      :available_prompts_as_fractions => [],
+      :replies_over_odds => [],
+      :prompter_expected => [],
+      :prompter_odds => [],
       # Throwaways
       :totaled_at_reply_prompting_users_posts => [],
       :totaled_at_reply_total_posts => [],
       :totaled_at_reply_all_possible_users_posts => []}
-  per_tie_strength_counter_hash.keys.each do |key|
-    (cap + 1).times do |i|
-      per_tie_strength_counter_hash[key][i] = 0
+  set_hash_array_to_zero_for(per_tie_strength_counter_hash, cap + 1)
+  totaled_at_reply_counter_hash = { # Not per tie strength, but for all
+      :prompting_users_posts => 0,
+      :total_posts => 0}
+  threads = ThreadStore.all()
+  time_sorted_posts = get_time_sorted_posts(threads)
+  replying_tie_strength_inner(time_sorted_posts, tie_strength_counter_hash,
+      per_tie_strength_counter_hash, totaled_at_reply_counter_hash, cap)
+  replying_tie_strength_save(per_tie_strength_counter_hash, totaled_at_reply_counter_hash)
+end
+
+def replying_tie_strength_in_threads
+  puts '## Replying per tie strength in threads'
+  cap = 25
+  tie_strength_counter_hash = {} # tracks number of replies made
+  # Additive, adds total & replies at that time
+  per_tie_strength_counter_hash = {
+      :replies => [],
+      :replies_as_fractions => [],
+      :available_prompts_as_fractions => [],
+      :replies_over_odds => [],
+      :prompter_expected => [],
+      :prompter_odds => [],
+      # Throwaways
+      :totaled_at_reply_prompting_users_posts => [],
+      :totaled_at_reply_total_posts => [],
+      :totaled_at_reply_all_possible_users_posts => []}
+  set_hash_array_to_zero_for(per_tie_strength_counter_hash, cap + 1)
+  totaled_at_reply_counter_hash = { # Not per tie strength, but for all
+      :prompting_users_posts => 0,
+      :total_posts => 0}
+  p = 0
+  ThreadStore.all do |thread|
+    if p % 500
+      puts p
     end
+    time_sorted_posts = get_time_sorted_posts([thread])
+    replying_tie_strength_inner(time_sorted_posts, tie_strength_counter_hash,
+        per_tie_strength_counter_hash, totaled_at_reply_counter_hash, cap)
+    p += 1
   end
+  replying_tie_strength_save(per_tie_strength_counter_hash, totaled_at_reply_counter_hash, "_in_threads")
+end
+
+def replying_tie_strength_inner(time_sorted_posts, tie_strength_counter_hash,
+    per_tie_strength_counter_hash, totaled_at_reply_counter_hash, cap)
+  total_counter = 0
+  per_user_posts_counter_hash = {}
   time_sorted_posts.each do |post|
     if !post[:count_only]
       # Check for reciprocity
-      if !replies_counter_hash[post[:user]]
-        replies_counter_hash[post[:user]] = {}
+      if !tie_strength_counter_hash[post[:user]]
+        tie_strength_counter_hash[post[:user]] = {}
       end
-      tie_strength = replies_counter_hash[post[:user]][post[:prompted_by_user]] || 0
+      tie_strength = tie_strength_counter_hash[post[:user]][post[:prompted_by_user]] || 0
       if tie_strength > cap
         tie_strength = cap
       end
-      per_tie_strength_counter_hash["replies"][tie_strength] += 1
+      per_tie_strength_counter_hash[:replies][tie_strength] += 1
       per_tie_strength_counter_hash[:totaled_at_reply_prompting_users_posts][tie_strength] += per_user_posts_counter_hash[post[:prompted_by_user]] || 0 # must exist
       per_tie_strength_counter_hash[:totaled_at_reply_total_posts][tie_strength] += total_counter
       per_user_posts_counter_hash.keys.each do |user|
-        tie_strength_i = replies_counter_hash[post[:user]][user] || 0
+        tie_strength_i = tie_strength_counter_hash[post[:user]][user] || 0
         if tie_strength_i > cap
           tie_strength_i = cap
         end
         per_tie_strength_counter_hash[:totaled_at_reply_all_possible_users_posts][tie_strength_i] += per_user_posts_counter_hash[user]
       end
       # Now record post
-      totaled_at_reply_prompting_users_posts_counter += per_user_posts_counter_hash[post[:prompted_by_user]] || 0
-      totaled_total_posts_counter += total_counter
-      if !replies_counter_hash[post[:prompted_by_user]]
-        replies_counter_hash[post[:prompted_by_user]] = {}
+      totaled_at_reply_counter_hash[:prompting_users_posts] += per_user_posts_counter_hash[post[:prompted_by_user]] || 0
+      totaled_at_reply_counter_hash[:total_posts] += total_counter
+      if !tie_strength_counter_hash[post[:prompted_by_user]]
+        tie_strength_counter_hash[post[:prompted_by_user]] = {}
       end
-      if !replies_counter_hash[post[:prompted_by_user]][post[:user]]
-        replies_counter_hash[post[:prompted_by_user]][post[:user]] = 0
+      if !tie_strength_counter_hash[post[:prompted_by_user]][post[:user]]
+        tie_strength_counter_hash[post[:prompted_by_user]][post[:user]] = 0
       end
-      replies_counter_hash[post[:prompted_by_user]][post[:user]] += 1
+      tie_strength_counter_hash[post[:prompted_by_user]][post[:user]] += 1
     end
     total_counter += 1
     if !per_user_posts_counter_hash[post[:user]]
@@ -580,26 +690,133 @@ def replying_tie_strength
     end
     per_user_posts_counter_hash[post[:user]] += 1
   end
+end
+
+def replying_tie_strength_save(per_tie_strength_counter_hash, totaled_at_reply_counter_hash, postfix = "")
   # Calculate additionals
-  total_replies_sum = per_tie_strength_counter_hash["replies"].inject {|sum, x| sum + x}
-  total_prompter_expected = (totaled_at_reply_prompting_users_posts_counter * 1.0) / totaled_total_posts_counter
-  per_tie_strength_counter_hash["replies"].size.times do |i|
-    per_tie_strength_counter_hash["replies_as_fractions"][i] = 
-        (per_tie_strength_counter_hash["replies"][i] * 1.0) / total_replies_sum
-    per_tie_strength_counter_hash["available_prompts_as_fractions"][i] = 
-        (per_tie_strength_counter_hash[:totaled_at_reply_all_possible_users_posts][i] * 1.0) / totaled_total_posts_counter
-    per_tie_strength_counter_hash["replies_over_odds"][i] = 
-        (per_tie_strength_counter_hash["replies_as_fractions"][i] * 1.0) / per_tie_strength_counter_hash["available_prompts_as_fractions"][i]
-    per_tie_strength_counter_hash["prompter_expected"][i] = 
+  total_replies_sum = per_tie_strength_counter_hash[:replies].inject {|sum, x| sum + x}
+  total_prompter_expected = (totaled_at_reply_counter_hash[:prompting_users_posts] * 1.0) / totaled_at_reply_counter_hash[:total_posts]
+  per_tie_strength_counter_hash[:replies].size.times do |i|
+    per_tie_strength_counter_hash[:replies_as_fractions][i] = 
+        (per_tie_strength_counter_hash[:replies][i] * 1.0) / total_replies_sum
+    per_tie_strength_counter_hash[:available_prompts_as_fractions][i] = 
+        (per_tie_strength_counter_hash[:totaled_at_reply_all_possible_users_posts][i] * 1.0) / totaled_at_reply_counter_hash[:total_posts]
+    per_tie_strength_counter_hash[:replies_over_odds][i] = 
+        (per_tie_strength_counter_hash[:replies_as_fractions][i] * 1.0) / per_tie_strength_counter_hash[:available_prompts_as_fractions][i]
+    per_tie_strength_counter_hash[:prompter_expected][i] = 
         (per_tie_strength_counter_hash[:totaled_at_reply_prompting_users_posts][i] * 1.0) / per_tie_strength_counter_hash[:totaled_at_reply_total_posts][i]
-    per_tie_strength_counter_hash["prompter_odds"][i] =
-        (per_tie_strength_counter_hash["prompter_expected"][i] * 1.0) / total_prompter_expected
+    per_tie_strength_counter_hash[:prompter_odds][i] =
+        (per_tie_strength_counter_hash[:prompter_expected][i] * 1.0) / total_prompter_expected
   end
   per_tie_strength_counter_hash.delete(:totaled_at_reply_prompting_users_posts)
   per_tie_strength_counter_hash.delete(:totaled_at_reply_total_posts)
   per_tie_strength_counter_hash.delete(:totaled_at_reply_all_possible_users_posts)
-  ForumTools::File.save_stat("replies_for_each_tie_strenght",
+  ForumTools::File.save_stat("replies_for_each_tie_strenght" + postfix,
       per_tie_strength_counter_hash, :add_case_numbers => true)
+end
+
+def replying_odds_over_time
+  puts '## Replying odds over time'
+  cap = 30
+  per_day_made_tie_array = [] # tracks whether replied i days ago
+  # Additive, adds total & replies at that time
+  days_ago_counter_hash = {
+      :replies_to_ties => [],
+      :replies_to_ties_as_fractions => [],
+      :available_tie_prompts_as_fractions => [],
+      :replies_to_ties_over_odds => [],
+      # Throwaways
+      :replies => [],
+      :totaled_prompting_ties_posts => [],
+      :totaled_prompting_posts => []}
+  set_hash_array_to_zero_for(days_ago_counter_hash, cap)
+  forums = ForumsStore.new()
+  threads = ThreadStore.all()
+  time_sorted_posts = get_time_sorted_posts(threads)
+  daily_posts_array = []
+  time_sorted_posts.each do |post|
+    post_day = TimeTools.day(post[:time], :start_time => forums.start_time) 
+    if !daily_posts_array[post_day]
+      daily_posts_array[post_day] = []
+    end
+    daily_posts_array[post_day] << post
+  end
+  daily_posts_array.collect! {|ps| ps || []}
+  received_reply_hash = {}
+  puts daily_posts_array.size
+  p = 0
+  daily_posts_array.each do |posts|
+    if p % 100
+      puts p
+    end
+    todays_per_user_posts_counter_hash = {}
+    todays_first_reply_hash = {}
+    posts.each do |post|
+      if !post[:count_only]
+        if !received_reply_hash[post[:prompted_by_user]]
+          received_reply_hash[post[:prompted_by_user]] = {}
+        end
+        if !received_reply_hash[post[:prompted_by_user]][post[:user]]
+          if !todays_first_reply_hash[post[:prompted_by_user]]
+            todays_first_reply_hash[post[:prompted_by_user]] = {}
+          end
+          todays_first_reply_hash[post[:prompted_by_user]][post[:user]] = true
+          received_reply_hash[post[:prompted_by_user]][post[:user]] = true
+        end
+      end
+      if !todays_per_user_posts_counter_hash[post[:user]]
+        todays_per_user_posts_counter_hash[post[:user]] = 0
+      end
+      todays_per_user_posts_counter_hash[post[:user]] += 1
+    end
+    per_day_made_tie_array.unshift(todays_first_reply_hash)
+    if per_day_made_tie_array.size > cap
+      per_day_made_tie_array.pop()
+    end
+    day_i = 0
+    per_day_made_tie_array.each do |yesterdays_first_reply_hash|
+      posts.each do |post|
+        if !post[:count_only]
+          if yesterdays_first_reply_hash[post[:user]] and yesterdays_first_reply_hash[post[:user]][post[:prompted_by_user]]
+            days_ago_counter_hash[:replies_to_ties][day_i] += 1
+          end
+          days_ago_counter_hash[:replies][day_i] += 1
+          todays_per_user_posts_counter_hash.keys.each do |user|
+            is_tie = (yesterdays_first_reply_hash[post[:user]] and yesterdays_first_reply_hash[post[:user]][user]) || false
+            if is_tie
+              days_ago_counter_hash[:totaled_prompting_ties_posts][day_i] += todays_per_user_posts_counter_hash[user]
+            end
+            days_ago_counter_hash[:totaled_prompting_posts][day_i] += todays_per_user_posts_counter_hash[user]
+          end
+        end
+      end
+      day_i += 1
+    end
+    p += 1
+  end
+
+  # Calculate additionals
+  days_ago_counter_hash[:replies].size.times do |i|
+    days_ago_counter_hash[:replies_to_ties_as_fractions][i] = 
+        (days_ago_counter_hash[:replies_to_ties][i] * 1.0) / days_ago_counter_hash[:replies][i]
+    days_ago_counter_hash[:available_tie_prompts_as_fractions][i] = 
+        (days_ago_counter_hash[:totaled_prompting_ties_posts][i] * 1.0) / days_ago_counter_hash[:totaled_prompting_posts][i]
+    days_ago_counter_hash[:replies_to_ties_over_odds][i] = 
+        (days_ago_counter_hash[:replies_to_ties_as_fractions][i] * 1.0) / days_ago_counter_hash[:available_tie_prompts_as_fractions][i]
+  end
+  days_ago_counter_hash.delete(:replies)
+  days_ago_counter_hash.delete(:totaled_prompting_ties_posts)
+  days_ago_counter_hash.delete(:totaled_prompting_posts)
+  ForumTools::File.save_stat("replies_over_odds_days_ago",
+      days_ago_counter_hash, :add_case_numbers => true)
+end
+
+def set_hash_array_to_zero_for(hash_array, times)
+  hash_array.keys.each do |key|
+    times.times do |i|
+      hash_array[key][i] ||= 0
+    end
+  end
 end
 
 def replying_over_time
@@ -742,10 +959,12 @@ def get_time_sorted_posts(threads)
         post[:replies_to].each do |id|
           if !post[:prompted_by_user] and posts_hash[id] and posts_hash[id][:user] != post[:user]
             post[:prompted_by_user] = posts_hash[id][:user]
+            post[:prompted_by_id] = id
           end
         end
       elsif post[:indent] > 0 and indent_stack[post[:indent] - 1] and indent_stack[post[:indent] - 1][:user] != post[:user] # self-replies are left out
         post[:prompted_by_user] = indent_stack[post[:indent] - 1][:user]
+        post[:prompted_by_id] = indent_stack[post[:indent] - 1][:id]
       end
       if !post[:prompted_by_user]
         post[:count_only] = true
@@ -1264,25 +1483,28 @@ elsif args[0] == "hn"
   average_ratings_after_time_level()
 else
   initialize_environment(args)
-  simple()
-  over_time()
-  users_over_time()
-  over_time_per_user()
-  over_time_per_forum()
+#  simple()
+#  over_time()
+#  users_over_time()
+#  over_time_per_user()
+#  over_time_per_forum()
 
-  users_over_time_per_forum()
-  left_after_one_post()
-  arrivals_leavers_over_time()
-  arrivals_leavers_over_time_per_forum()
-  distance_between_posts()
-  posts_later_than_x_threads()
+#  users_over_time_per_forum()
+#  left_after_one_post()
+#  replies_received_by_prompts() # possibly run for boards
+#  arrivals_leavers_over_time()
+#  arrivals_leavers_over_time_per_forum()
+#  distance_between_posts() # possibly run for boards
+#  posts_later_than_x_threads()
 
-  thread_size_hours_over_time()
-  time_between_replies()
+#  thread_size_hours_over_time()
+#  time_between_replies()
 
-  replying_tie_strength()
-  replying_over_time()
-  hours_between_reply_posts_by_same_user()
+#  replying_tie_strength()
+#  replying_tie_strength_in_threads() # run for boards
+#  replying_odds_over_time() # run for boards
+#  replying_over_time()
+#  hours_between_reply_posts_by_same_user()
 end
 
 # TODO consider what to do with posts per hour per user
