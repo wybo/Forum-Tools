@@ -156,6 +156,49 @@ def over_time_per_forum
   end
 end
 
+def in_last_month_per_user
+  forums = ForumsStore.new()
+  end_time = forums.end_time - 3600 * 24 * 2
+  start_time = end_time - 3600 * 24 * 30
+  threads = ThreadStore.all()
+  time_sorted_posts = get_time_sorted_posts(threads)
+  posts_counter = 0
+  threads_counter = 0
+  posts_for_each_user_hash = {}
+  threads_for_each_user_hash = {}
+  time_sorted_posts.each do |post|
+    if post[:time] > start_time and post[:time] < end_time
+      if post[:indent] == 0
+        if !threads_for_each_user_hash[post[:user]]
+          threads_for_each_user_hash[post[:user]] = 0
+        end
+        threads_for_each_user_hash[post[:user]] += 1
+        threads_counter += 1
+      else
+        if !posts_for_each_user_hash[post[:user]]
+          posts_for_each_user_hash[post[:user]] = 0
+        end
+        posts_for_each_user_hash[post[:user]] += 1
+        posts_counter += 1
+      end
+    end
+  end
+  ForumTools::File.save_stat("last_months_total_threads", ["threads", threads_counter])
+  ForumTools::File.save_stat("last_months_total_posts", ["posts", posts_counter])
+  posts_for_each_user = posts_for_each_user_hash.keys.collect {|k| posts_for_each_user_hash[k] }.sort.reverse
+  threads_for_each_user = threads_for_each_user_hash.keys.collect {|k| threads_for_each_user_hash[k] }.sort.reverse
+
+  ForumTools::File.save_stat("last_months_posts_for_each_user",
+      ["posts"].concat(posts_for_each_user))
+
+  filler_a = []
+  (posts_for_each_user.size - threads_for_each_user.size).times do
+    filler_a << 0
+  end
+  ForumTools::File.save_stat("last_months_threads_for_each_user",
+      ["threads"].concat(threads_for_each_user).concat(filler_a))
+end
+
 def users_over_time
   puts '## Unique daily active users over time'
   forums = ForumsStore.new()
@@ -237,6 +280,55 @@ def replies_received_by_prompts
   replies_received_by_prompts_fraction = (received_reply_counter * 1.0) / time_sorted_posts.size
   ForumTools::File.save_stat("replies_received_by_prompts", ["users", received_reply_counter])
   ForumTools::File.save_stat("replies_received_by_prompts_fraction", ["fraction", replies_received_by_prompts_fraction])
+end
+
+def replies_to_directly_before
+  forums = ForumsStore.new()
+  if forums.size > 1
+    hash = replies_to_directly_before_boards()
+  else
+    hash = replies_to_directly_before_hn()
+  end
+  to_directly_before_fraction = (hash[:to_before] * 1.0) / hash[:total]
+  ForumTools::File.save_stat("replies_to_directly_before_fraction", ["fraction", to_directly_before_fraction])
+end
+
+def replies_to_directly_before_boards
+  total_counter = 0
+  to_before_counter = 0
+  last_post = {}
+  ThreadStore.all do |thread|
+    thread.each do |post|
+      if post[:indent] > 0
+        if post[:replies_to]
+          if post[:replies_to].first == last_post[:id]
+            to_before_counter += 1
+          end
+        else
+          to_before_counter += 1
+        end
+      end
+      total_counter += 1
+      last_post = post
+    end
+  end
+  return {:total => total_counter, :to_before => to_before_counter}
+end
+
+def replies_to_directly_before_hn
+  total_counter = 0
+  to_before_counter = 0
+  last_post = {}
+  ThreadStore.all do |thread|
+    thread.each do |post|
+      if post[:indent] > 0 and last_post[:indent] < post[:indent]
+        to_before_counter += 1
+      end
+      total_counter += 1
+      last_post = post
+    end
+  end
+  return {:total => total_counter, :to_before => to_before_counter}
 end
 
 def arrivals_leavers_over_time
@@ -325,23 +417,23 @@ def arrivals_leavers_over_time_per_forum_inner(arrival_times_hash, leaver_times_
   fraction_leaving_users_hash = {}
   fraction_totaled_arriving_users_array = []
   fraction_totaled_leaving_users_array = []
-  active_users_hash.keys.each do |key|
+  active_users_hash.keys.each do |forum|
     total_arriving_users_counter = 0
     total_leaving_users_counter = 0
     total_active_users_counter = 0
-    fraction_arriving_users_hash[key] = [0]
-    fraction_leaving_users_hash[key] = [0]
-    active_users_hash[key].size.times do |i|
+    fraction_arriving_users_hash[forum] = [0]
+    fraction_leaving_users_hash[forum] = [0]
+    active_users_hash[forum].size.times do |i|
       if i > 0
-        total_arriving_users_counter += arriving_users_hash[key][i]
-        total_leaving_users_counter += leaving_users_hash[key][i]
-        total_active_users_counter += active_users_hash[key][i - 1]
-        if active_users_hash[key][i - 1] > 0
-          fraction_arriving_users_hash[key][i] = (arriving_users_hash[key][i] * 1.0) / active_users_hash[key][i - 1]
-          fraction_leaving_users_hash[key][i] = (leaving_users_hash[key][i] * 1.0) / active_users_hash[key][i - 1]
+        total_arriving_users_counter += arriving_users_hash[forum][i]
+        total_leaving_users_counter += leaving_users_hash[forum][i]
+        total_active_users_counter += active_users_hash[forum][i - 1]
+        if active_users_hash[forum][i - 1] > 0
+          fraction_arriving_users_hash[forum][i] = (arriving_users_hash[forum][i] * 1.0) / active_users_hash[forum][i - 1]
+          fraction_leaving_users_hash[forum][i] = (leaving_users_hash[forum][i] * 1.0) / active_users_hash[forum][i - 1]
         else
-          fraction_arriving_users_hash[key][i] = 0
-          fraction_leaving_users_hash[key][i] = 0
+          fraction_arriving_users_hash[forum][i] = 0
+          fraction_leaving_users_hash[forum][i] = 0
         end
       end
     end
@@ -386,6 +478,7 @@ def distance_between_posts
   xin_sessions_counter = 0
   distance_array = []
   distance_after_received_reply_array = []
+  distance_otherwise_array = []
   forum_names.each do |forum_name|
     threads = ThreadStore.all(forum_name)
     per_user_posts_index_hash = get_per_user_posts_index_hash(threads)
@@ -412,6 +505,8 @@ def distance_between_posts
               distance = calculate_distance_between_indices(threads, last_index, index)
               if received_reply_hash[last_index[:id]]
                 distance_after_received_reply_array << distance
+              else
+                distance_otherwise_array << distance
               end
               distance_array << distance
               if !in_session
@@ -432,18 +527,20 @@ def distance_between_posts
       {"distance" => distance_array})
   ForumTools::File.save_stat("distance_between_posts_after_received_reply",
       {"distance" => distance_after_received_reply_array})
+  ForumTools::File.save_stat("distance_between_posts_otherwise",
+      {"distance" => distance_otherwise_array})
   xin_session_posts_fraction = (xin_sessions_counter * 1.0) / total_sessions_counter
   ForumTools::File.save_stat("distance_between_posts_xin_sessions_fraction",
       ["fraction", xin_session_posts_fraction])
 
-  distances_fraction_array = add_up_and_fraction_distances(distance_array, 200)
   distances_after_reply_fraction_array = add_up_and_fraction_distances(distance_after_received_reply_array, 200)
+  distances_otherwise_fraction_array = add_up_and_fraction_distances(distance_otherwise_array, 200)
   boost_array = []
   i = 0
   distances_after_reply_fraction_array.each do |d_a_f|
     if i > 0 # distances were counted as of 1, with 1 meaning no distance
-      if distances_fraction_array[i] > 0
-        boost_array[i - 1] = d_a_f / distances_fraction_array[i]
+      if distances_otherwise_fraction_array[i] > 0
+        boost_array[i - 1] = d_a_f / distances_otherwise_fraction_array[i]
       else
         boost_array[i - 1] = 0
       end
@@ -508,46 +605,62 @@ def calculate_distance_between_indices(threads, last_index, index)
   return counter
 end
 
-def posts_later_than_x_threads # only meaningful for HN
+def posts_after_leaving_homepage
   forums = ForumsStore.new()
-  if forums.size > 1
-    forum_names = forums.collect {|f| f[:name]}
+  if forums.size > 1 # Not for hn
+    posts_after_x_threads_inner(forums, 20)
+    posts_after_x_threads_inner(forums, 40)
   else
-    forum_names = [:all]
+    posts_after_leaving_homepage_inner()
   end
-  total_posts_counter_array = []
-  later_posts_counter_array = []
+end
+
+def posts_after_x_threads_inner(forums, limit)
+  forum_names = forums.collect {|f| f[:name]}
+  later_posts_counter = 0
+  total_posts_counter = 0
   forum_names.each do |forum_name|
-    n_stack = []
-    ThreadStore.all(forum_name) do |thread|
-      n_stack.push(thread)
-      if n_stack.size > 200
-        n_stack.shift()
-      end
-      newest_time = n_stack[-1][0][:time]
-      i = 0
-      n_stack.reverse.each do |thread| # reversed
-        thread.each do |post|
-          if !total_posts_counter_array[i]
-            later_posts_counter_array[i] = 0
-            total_posts_counter_array[i] = 0
-          end
-          total_posts_counter_array[i] += 1
-          if post[:time] >= newest_time
-            later_posts_counter_array[i] += 1
-          end
+    threads = ThreadStore.all(forum_name)
+    threads_queue = []
+    threads_hash = {}
+    bumped_time = nil
+    time_sorted_posts = get_time_sorted_posts(threads)
+    time_sorted_posts.each do |post|
+      if post[:indent] == 0 # a thread
+        threads_queue.push(post[:id])
+        threads_hash[post[:id]] = post
+        if threads_queue.size > limit
+          old_thread_id = threads_queue.shift()
+          threads_hash.delete(old_thread_id)
+          # time at which the 21st thread was bumped
+          bumped_time = post[:time]
         end
-        i += 1
+      end
+      if !threads_hash[post[:thread_id]] and bumped_time and post[:time] > bumped_time
+        later_posts_counter += 1
       end
     end
+    total_posts_counter += time_sorted_posts.size
   end
-  later_posts_fraction_array = []
-  total_posts_counter_array.size.times do |i|
-    later_posts_fraction_array[i] = (later_posts_counter_array[i] * 1.0) / total_posts_counter_array[i]
+  later_posts_fraction = (later_posts_counter * 1.0) / total_posts_counter
+  ForumTools::File.save_stat("posts_fraction_after_#{limit}_threads",
+      ["fraction", later_posts_fraction])
+end
+
+def posts_after_leaving_homepage_inner # HN
+  later_posts_counter = 0
+  total_posts_counter = 0
+  ThreadStore.all do |thread|
+    thread.each do |post|
+      if post[:time] > thread.off_frontpage_time
+        later_posts_counter += 1
+      end
+      total_posts_counter += 1
+    end
   end
-  ForumTools::File.save_stat("posts_fraction_later_than_x_threads",
-      {"fraction" => later_posts_fraction_array},
-      :add_case_numbers => true)
+  later_posts_fraction = (later_posts_counter * 1.0) / total_posts_counter
+  ForumTools::File.save_stat("posts_fraction_after_leaving_homepage",
+      ["fraction", later_posts_fraction])
 end
 
 def thread_size_hours_over_time
@@ -591,7 +704,7 @@ end
 
 def replying_tie_strength
   puts '## Replying per tie strength'
-  cap = 25
+  cap = 10
   tie_strength_counter_hash = {} # tracks number of replies made
   # Additive, adds total & replies at that time
   per_tie_strength_counter_hash = {
@@ -618,7 +731,7 @@ end
 
 def replying_tie_strength_in_threads
   puts '## Replying per tie strength in threads'
-  cap = 25
+  cap = 10
   tie_strength_counter_hash = {} # tracks number of replies made
   # Additive, adds total & replies at that time
   per_tie_strength_counter_hash = {
@@ -638,14 +751,15 @@ def replying_tie_strength_in_threads
       :total_posts => 0}
   p = 0
   ThreadStore.all do |thread|
-    if p % 500
-      puts p
+    if p % 500 == 0
+      print p.to_s + '.'
     end
     time_sorted_posts = get_time_sorted_posts([thread])
     replying_tie_strength_inner(time_sorted_posts, tie_strength_counter_hash,
         per_tie_strength_counter_hash, totaled_at_reply_counter_hash, cap)
     p += 1
   end
+  print "\n"
   replying_tie_strength_save(per_tie_strength_counter_hash, totaled_at_reply_counter_hash, "_in_threads")
 end
 
@@ -715,7 +829,7 @@ def replying_tie_strength_save(per_tie_strength_counter_hash, totaled_at_reply_c
       per_tie_strength_counter_hash, :add_case_numbers => true)
 end
 
-def replying_odds_over_time
+def replying_odds_over_time_old
   puts '## Replying odds over time'
   cap = 30
   per_day_made_tie_array = [] # tracks whether replied i days ago
@@ -746,8 +860,8 @@ def replying_odds_over_time
   puts daily_posts_array.size
   p = 0
   daily_posts_array.each do |posts|
-    if p % 100
-      puts p
+    if p % 100 == 0
+      print p
     end
     todays_per_user_posts_counter_hash = {}
     todays_first_reply_hash = {}
@@ -782,7 +896,7 @@ def replying_odds_over_time
           end
           days_ago_counter_hash[:replies][day_i] += 1
           todays_per_user_posts_counter_hash.keys.each do |user|
-            is_tie = (yesterdays_first_reply_hash[post[:user]] and yesterdays_first_reply_hash[post[:user]][user]) || false
+            is_tie = ((yesterdays_first_reply_hash[post[:user]] and yesterdays_first_reply_hash[post[:user]][user]) || false)
             if is_tie
               days_ago_counter_hash[:totaled_prompting_ties_posts][day_i] += todays_per_user_posts_counter_hash[user]
             end
@@ -809,6 +923,229 @@ def replying_odds_over_time
   days_ago_counter_hash.delete(:totaled_prompting_posts)
   ForumTools::File.save_stat("replies_over_odds_days_ago",
       days_ago_counter_hash, :add_case_numbers => true)
+end
+
+def replying_odds_over_time_in_out_threads
+  replying_odds_over_time_in_out_threads_inner()
+  replying_odds_over_time_in_out_threads_inner(true)
+end
+
+def replying_odds_over_time_in_out_threads_inner(use_user_after = false)
+  puts '## Replying odds over time'
+  puts '# Preparing'
+  cap = 30
+  per_day_made_tie_array = [] # tracks whether replied i days ago
+  # Additive, adds total & replies at that time
+  days_ago_counter_hash = {
+      :replies_to_ties => [],
+      :replies_to_ties_in => [],
+      :replies_to_ties_out => [],
+      :replies_to_ties_as_fractions => [],
+      :replies_to_ties_in_as_fractions => [],
+      :replies_to_ties_out_as_fractions => [],
+      :available_tie_prompts_as_fractions => [],
+      :available_tie_prompts_in_as_fractions => [],
+      :available_tie_prompts_out_as_fractions => [],
+      :replies_to_ties_over_odds => [],
+      :replies_to_ties_in_over_odds => [],
+      :replies_to_ties_out_over_odds => [],
+      # Throwaways
+      :replies => [],
+      :replies_in => [],
+      :replies_out => [],
+      :totaled_prompting_ties_posts => [],
+      :totaled_prompting_ties_in_posts => [],
+      :totaled_prompting_ties_out_posts => [],
+      :totaled_prompting_posts => [],
+      :totaled_prompting_posts_in => [],
+      :totaled_prompting_posts_out => []}
+  set_hash_array_to_zero_for(days_ago_counter_hash, cap)
+  forums = ForumsStore.new()
+  # threads = ThreadStore.all()
+  threads = get_random_forums_if_multi_forum(forums)
+  time_sorted_posts = get_time_sorted_posts(threads)
+  received_reply_in_thread_hash = {}
+  time_sorted_posts.each do |post|
+    # record first interactions per thread
+    if !post[:count_only]
+      if !received_reply_in_thread_hash[post[:prompted_by_user]]
+        received_reply_in_thread_hash[post[:prompted_by_user]] = {}
+      end
+      if !received_reply_in_thread_hash[post[:prompted_by_user]][post[:thread_id]]
+        received_reply_in_thread_hash[post[:prompted_by_user]][post[:thread_id]] = true
+      end
+    end
+    if received_reply_in_thread_hash[post[:user]] and
+        received_reply_in_thread_hash[post[:user]][post[:thread_id]]
+      post[:in_thread_reply] = true # must have posted before and received a reply
+    else
+      post[:in_thread_reply] = false
+    end
+  end
+  # clear unused datastructures
+  received_reply_in_thread_hash = nil
+  daily_posts_array = []
+  time_sorted_posts.each do |post|
+    # collect posts per day
+    post_day = TimeTools.day(post[:time], :start_time => forums.start_time) 
+    if !daily_posts_array[post_day]
+      daily_posts_array[post_day] = []
+    end
+    daily_posts_array[post_day] << post
+  end
+  daily_posts_array.collect! {|ps| ps || []}
+  if use_user_after
+    posts_index_hash = get_posts_index_hash(threads)
+  else # clear unused datastructures
+    threads = nil
+  end
+  time_sorted_posts = nil
+  forums = nil
+  received_reply_hash = {}
+  puts '# Done prepping, ready for days'
+  puts 'Total days ' + daily_posts_array.size.to_s
+  p = 0
+  daily_posts_array.each do |posts|
+    if p % 10 == 0
+      print p.to_s + '.'
+    end
+    todays_per_user_posts_counter_hash = {}
+    todays_first_reply_hash = {}
+    posts.each do |post|
+      if !post[:count_only]
+        if use_user_after
+          reply_post = get_next_post_in_thread_not_by_user(post, posts_index_hash, threads, received_reply_hash)
+        else
+          reply_post = post
+        end
+        if reply_post
+          if !received_reply_hash[post[:prompted_by_user]]
+            received_reply_hash[post[:prompted_by_user]] = {}
+          end
+          if !received_reply_hash[post[:prompted_by_user]][reply_post[:user]]
+            if !todays_first_reply_hash[post[:prompted_by_user]]
+              todays_first_reply_hash[post[:prompted_by_user]] = {}
+            end
+            todays_first_reply_hash[post[:prompted_by_user]][reply_post[:user]] = true
+            received_reply_hash[post[:prompted_by_user]][reply_post[:user]] = true
+          end
+        end
+      end
+      if !todays_per_user_posts_counter_hash[post[:user]]
+        todays_per_user_posts_counter_hash[post[:user]] = 0
+      end
+      todays_per_user_posts_counter_hash[post[:user]] += 1
+    end
+    per_day_made_tie_array.unshift(todays_first_reply_hash)
+    if per_day_made_tie_array.size > cap
+      per_day_made_tie_array.pop()
+    end
+    day_i = 0
+    per_day_made_tie_array.each do |yesterdays_first_reply_hash|
+      posts.each do |post|
+        if !post[:count_only]
+          if yesterdays_first_reply_hash[post[:user]] and yesterdays_first_reply_hash[post[:user]][post[:prompted_by_user]]
+            if post[:in_thread_reply]
+              days_ago_counter_hash[:replies_to_ties_in][day_i] += 1
+            else
+              days_ago_counter_hash[:replies_to_ties_out][day_i] += 1
+            end
+          end
+          if post[:in_thread_reply]
+            days_ago_counter_hash[:replies_in][day_i] += 1
+          else
+            days_ago_counter_hash[:replies_out][day_i] += 1
+          end
+          todays_per_user_posts_counter_hash.keys.each do |user|
+            is_tie = ((yesterdays_first_reply_hash[post[:user]] and yesterdays_first_reply_hash[post[:user]][user]) || false)
+            if is_tie
+              if post[:in_thread_reply]
+                days_ago_counter_hash[:totaled_prompting_ties_in_posts][day_i] += todays_per_user_posts_counter_hash[user]
+              else
+                days_ago_counter_hash[:totaled_prompting_ties_out_posts][day_i] += todays_per_user_posts_counter_hash[user]
+              end
+            end
+            if post[:in_thread_reply]
+              days_ago_counter_hash[:totaled_prompting_posts_in][day_i] += todays_per_user_posts_counter_hash[user]
+            else
+              days_ago_counter_hash[:totaled_prompting_posts_out][day_i] += todays_per_user_posts_counter_hash[user]
+            end
+          end
+        end
+      end
+      day_i += 1
+    end
+    p += 1
+  end
+  print "\n"
+
+  puts '# Calculating and saving now'
+  # Calculate additionals
+  cap.times do |i|
+    # adding
+    days_ago_counter_hash[:replies][i] =
+        days_ago_counter_hash[:replies_in][i] + days_ago_counter_hash[:replies_out][i]
+    days_ago_counter_hash[:replies_to_ties][i] =
+        days_ago_counter_hash[:replies_to_ties_in][i] + days_ago_counter_hash[:replies_to_ties_out][i]
+    days_ago_counter_hash[:totaled_prompting_ties_posts][i] = 
+        days_ago_counter_hash[:totaled_prompting_ties_in_posts][i] + days_ago_counter_hash[:totaled_prompting_ties_out_posts][i]
+    days_ago_counter_hash[:totaled_prompting_posts][i] = 
+        days_ago_counter_hash[:totaled_prompting_posts_in][i] + days_ago_counter_hash[:totaled_prompting_posts_out][i]
+    # calculating
+    days_ago_counter_hash[:replies_to_ties_as_fractions][i] = 
+        (days_ago_counter_hash[:replies_to_ties][i] * 1.0) / days_ago_counter_hash[:replies][i]
+    days_ago_counter_hash[:replies_to_ties_in_as_fractions][i] = 
+        (days_ago_counter_hash[:replies_to_ties_in][i] * 1.0) / days_ago_counter_hash[:replies_in][i]
+    days_ago_counter_hash[:replies_to_ties_out_as_fractions][i] = 
+        (days_ago_counter_hash[:replies_to_ties_out][i] * 1.0) / days_ago_counter_hash[:replies_out][i]
+
+    days_ago_counter_hash[:available_tie_prompts_as_fractions][i] = 
+        (days_ago_counter_hash[:totaled_prompting_ties_posts][i] * 1.0) / days_ago_counter_hash[:totaled_prompting_posts][i]
+    days_ago_counter_hash[:available_tie_prompts_in_as_fractions][i] = 
+        (days_ago_counter_hash[:totaled_prompting_ties_in_posts][i] * 1.0) / days_ago_counter_hash[:totaled_prompting_posts_in][i]
+    days_ago_counter_hash[:available_tie_prompts_out_as_fractions][i] = 
+        (days_ago_counter_hash[:totaled_prompting_ties_out_posts][i] * 1.0) / days_ago_counter_hash[:totaled_prompting_posts_out][i]
+
+    days_ago_counter_hash[:replies_to_ties_over_odds][i] = 
+        (days_ago_counter_hash[:replies_to_ties_as_fractions][i] * 1.0) / days_ago_counter_hash[:available_tie_prompts_as_fractions][i]
+    days_ago_counter_hash[:replies_to_ties_in_over_odds][i] = 
+        (days_ago_counter_hash[:replies_to_ties_in_as_fractions][i] * 1.0) / days_ago_counter_hash[:available_tie_prompts_in_as_fractions][i]
+    days_ago_counter_hash[:replies_to_ties_out_over_odds][i] = 
+        (days_ago_counter_hash[:replies_to_ties_out_as_fractions][i] * 1.0) / days_ago_counter_hash[:available_tie_prompts_out_as_fractions][i]
+  end
+  days_ago_counter_hash.delete(:replies)
+  days_ago_counter_hash.delete(:replies_in)
+  days_ago_counter_hash.delete(:replies_out)
+  days_ago_counter_hash.delete(:totaled_prompting_ties_posts)
+  days_ago_counter_hash.delete(:totaled_prompting_ties_in_posts)
+  days_ago_counter_hash.delete(:totaled_prompting_ties_out_posts)
+  days_ago_counter_hash.delete(:totaled_prompting_posts)
+  days_ago_counter_hash.delete(:totaled_prompting_posts_in)
+  days_ago_counter_hash.delete(:totaled_prompting_posts_out)
+  if use_user_after
+    postfix = '_for_user_after'
+  else
+    postfix = ''
+  end
+  ForumTools::File.save_stat("replies_over_odds_days_ago#{postfix}",
+      days_ago_counter_hash, :add_case_numbers => true)
+end
+
+def get_random_forums_if_multi_forum(forums)
+  if forums.size > 1
+    selected_threads = []
+    forum_names = forums.collect {|f| f[:name] }
+    selected_names = forum_names.sort_by { rand }[0...50]
+    # selected_names = ["9", "610", "68", "1014", "999", "528", "36", "365", "97", "58"] # 7 is After hours, 9 Comp tech
+    selected_names = ["9", "7"] # 7 is After hours, 9 Comp tech
+    selected_names.each do |forum_name|
+      puts forum_name
+      selected_threads.concat(ThreadStore.all(forum_name))
+    end
+    return selected_threads
+  else
+    return ThreadStore.all()
+  end
 end
 
 def set_hash_array_to_zero_for(hash_array, times)
@@ -867,16 +1204,7 @@ def replying_over_time
         last_received_reply = last_received_user_user_replies_hash[post[:user].to_s + "&" + post[:prompted_by_user].to_s]
         add_after_reply_hours(after_reply_hours_until_post_hash, last_received_reply, post)
       end
-      next_post_in_thread = nil
-      thread = threads[posts_index_hash[post[:id]][:thread]]
-      i = posts_index_hash[post[:id]][:index] + 1
-      while !next_post_in_thread and i < thread.size
-        # no need to check for count_only, as those are prompting thread opening posts only
-        if thread[i][:user] != post[:user]
-          next_post_in_thread = thread[i]
-        end
-        i += 1
-      end
+      next_post_in_thread = get_next_post_in_thread_not_by_user(post, posts_index_hash, threads)
       if next_post_in_thread
         last_received_user_user_replies_hash[post[:prompted_by_user].to_s + "&" + next_post_in_thread[:user].to_s] = post
       end
@@ -886,6 +1214,27 @@ def replying_over_time
   ForumTools::File.save_stat("after_reply_hours_until_reply_to_poster_after_replyer",
       after_reply_hours_until_post_hash,
       :add_case_numbers => true)
+end
+
+def get_next_post_in_thread_not_by_user(post, posts_index_hash, threads, reply_hash = nil)
+  next_post_in_thread = nil
+  thread = threads[posts_index_hash[post[:id]][:thread]]
+  i = posts_index_hash[post[:id]][:index] + 1
+  while !next_post_in_thread and i < thread.size
+    # no need to check for count_only, as those are prompting thread opening posts only
+    if thread[i][:user] != post[:user]
+      if reply_hash
+        if !reply_hash[post[:user]] or
+            (reply_hash[post[:user]] and !reply_hash[post[:user]][thread[i][:prompted_by_user]])
+          next_post_in_thread = thread[i]
+        end
+      else
+        next_post_in_thread = thread[i]
+      end
+    end
+    i += 1
+  end
+  return next_post_in_thread
 end
 
 def hours_between_reply_posts_by_same_user
@@ -976,29 +1325,6 @@ def get_time_sorted_posts(threads)
   time_sorted_posts.sort! {|a, b| a[:time] <=> b[:time]}
   return time_sorted_posts
 end
-
-# TODO deal with flat threads
-# TODO just reciprocated or not
-
-#  threads = ThreadStore.all()
-#  last_post = nil
-#  threads.each do |thread|
-#    received_replies_from_in_thread_hash = {}
-#    thread.each do |post|
-#      if !received_replies_from_in_thread_hash[post[:user]]
-#        received_replies_from_in_thread_hash[post[:user]] = {}
-#      end
-#      if last_post and last_post[:user] != post[:user]
-#        received_replies_from_in_thread_hash[last_post[:user]][post[:user]] = 1
-#        if received_replies_from_in_thread_hash[post[:user]][last_post[:user]]
-#          reply_to_replyer_in_thread += 1;
-#        else
-#          reply_to_other_in_thread += 1;
-#        end
-#      end
-#      last_post = post
-#    end
-#  end
 
 def add_up_forum_per_user(selected_forums)
   thread_times_hash = {}
@@ -1488,23 +1814,23 @@ else
 #  users_over_time()
 #  over_time_per_user()
 #  over_time_per_forum()
+#  in_last_month_per_user() # run for boards
 
 #  users_over_time_per_forum()
 #  left_after_one_post()
-#  replies_received_by_prompts() # possibly run for boards
+#  replies_received_by_prompts()
+#  replies_to_directly_before()
 #  arrivals_leavers_over_time()
 #  arrivals_leavers_over_time_per_forum()
-#  distance_between_posts() # possibly run for boards
-#  posts_later_than_x_threads()
+#  distance_between_posts()
+#  posts_after_leaving_homepage()
 
 #  thread_size_hours_over_time()
 #  time_between_replies()
 
-#  replying_tie_strength()
-#  replying_tie_strength_in_threads() # run for boards
-#  replying_odds_over_time() # run for boards
+#  replying_tie_strength() # to run
+#  replying_tie_strength_in_threads()
+  replying_odds_over_time_in_out_threads()
 #  replying_over_time()
 #  hours_between_reply_posts_by_same_user()
 end
-
-# TODO consider what to do with posts per hour per user

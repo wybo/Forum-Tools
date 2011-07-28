@@ -19,9 +19,8 @@ class ForumTools
       end
       FileUtils.rm_rf(CONFIG[:env_dir] + CONFIG[:var_dir])
       FileUtils.rm_rf(CONFIG[:env_dir] + CONFIG[:data_dir])
-#      FileUtils.rm_rf(CONFIG[:env_dir] + CONFIG[:raw_dir])
-#      FileUtils.rm_rf(CONFIG[:env_dir] + CONFIG[:yaml_dir])
-
+      FileUtils.rm_rf(CONFIG[:env_dir] + CONFIG[:raw_dir])
+      FileUtils.rm_rf(CONFIG[:env_dir] + CONFIG[:yaml_dir])
     end
 
     def self.init_dirs
