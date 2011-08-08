@@ -704,7 +704,7 @@ end
 
 def replying_tie_strength
   puts '## Replying per tie strength'
-  cap = 10
+  cap = 8
   tie_strength_counter_hash = {} # tracks number of replies made
   # Additive, adds total & replies at that time
   per_tie_strength_counter_hash = {
@@ -731,7 +731,7 @@ end
 
 def replying_tie_strength_in_threads
   puts '## Replying per tie strength in threads'
-  cap = 10
+  cap = 8
   tie_strength_counter_hash = {} # tracks number of replies made
   # Additive, adds total & replies at that time
   per_tie_strength_counter_hash = {
@@ -1136,8 +1136,7 @@ def get_random_forums_if_multi_forum(forums)
     selected_threads = []
     forum_names = forums.collect {|f| f[:name] }
     selected_names = forum_names.sort_by { rand }[0...50]
-    # selected_names = ["9", "610", "68", "1014", "999", "528", "36", "365", "97", "58"] # 7 is After hours, 9 Comp tech
-    selected_names = ["9", "7"] # 7 is After hours, 9 Comp tech
+    # 7 is After hours, 9 Comp tech
     selected_names.each do |forum_name|
       puts forum_name
       selected_threads.concat(ThreadStore.all(forum_name))
@@ -1809,28 +1808,28 @@ elsif args[0] == "hn"
   average_ratings_after_time_level()
 else
   initialize_environment(args)
-#  simple()
-#  over_time()
-#  users_over_time()
-#  over_time_per_user()
-#  over_time_per_forum()
-#  in_last_month_per_user() # run for boards
+  simple()
+  over_time()
+  users_over_time()
+  over_time_per_user()
+  over_time_per_forum()
+  in_last_month_per_user()
 
-#  users_over_time_per_forum()
-#  left_after_one_post()
-#  replies_received_by_prompts()
-#  replies_to_directly_before()
-#  arrivals_leavers_over_time()
-#  arrivals_leavers_over_time_per_forum()
-#  distance_between_posts()
-#  posts_after_leaving_homepage()
+  users_over_time_per_forum()
+  left_after_one_post()
+  replies_received_by_prompts()
+  replies_to_directly_before()
+  arrivals_leavers_over_time()
+  arrivals_leavers_over_time_per_forum()
+  distance_between_posts()
+  posts_after_leaving_homepage()
 
-#  thread_size_hours_over_time()
-#  time_between_replies()
+  thread_size_hours_over_time()
+  time_between_replies()
 
-#  replying_tie_strength() # to run
-#  replying_tie_strength_in_threads()
+  replying_tie_strength()
+  replying_tie_strength_in_threads()
   replying_odds_over_time_in_out_threads()
-#  replying_over_time()
-#  hours_between_reply_posts_by_same_user()
+  replying_over_time()
+  hours_between_reply_posts_by_same_user()
 end

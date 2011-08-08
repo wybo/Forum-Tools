@@ -8,27 +8,75 @@ initialize_environment(ARGV)
 
 file_names = Dir.glob('../agent-based-forum/trunk/data/json/experiment*')
 
-file_names = ["../agent-based-forum/trunk/data/json/experiment.1311447101.json"]
-
 def confident_all(file_names)
   file_names.each do |file_name|
-    contents = JSON.parse(open(file_name).read)
+    collected_stat_data = {}
+    collected_daily_stat_data = {}
+    collected_critical_mass_data = {}
     new_file_name = file_name.split("/")[-1].gsub(".json", "")
     new_note = nil
     e = 0
-    contents.each do |experiment|
-      puts "Experiment " + e.to_s
-      config = experiment[0]["config"]
-      if !new_note
-        new_note = config["note"].gsub(/[^\w]/,"-")
+    string = open(file_name).read
+#    string = string[20..-5]
+    experiment_strings = string.split("}}],[{")
+    string = nil
+    experiment_strings.each do |experiment_string|
+      puts "Splitting experiment #{e}"
+      if e == 0
+        experiment_string = experiment_string[3..-1]
       end
-
-      experiment_data = read_experiment(experiment)
-      stat_data = get_confidence_intervals(experiment_data)
+      if e == experiment_strings.size - 1
+        experiment_string = experiment_string[0..-5]
+      end
+      experiment = JSON.parse("[{" + experiment_string + "}}]")
+      experiment_string = nil
+      puts "Experiment #{e}"
+      add_confident_experiment(experiment, collected_stat_data, collected_daily_stat_data,
+        collected_critical_mass_data)
+      experiment = nil
+      stat_data = {}
       e += 1
+    end
+
+    puts "Saving to test stats"
+    stat_file = "z_" + new_file_name + "."
+    ForumTools::File.save_stat(stat_file + "critical." + new_note,
+        collected_critical_mass_data)
+    ForumTools::File.save_stat(stat_file + "daily." + new_note,
+        collected_daily_stat_data, :add_case_numbers => true)
+    ForumTools::File.save_stat(stat_file + new_note,
+        collected_stat_data, :add_case_numbers => true)
+  end
+end
+
+def add_confident_experiment(experiment, collected_stat_data, collected_daily_stat_data,
+    collected_critical_mass_data)
+#  experiment = [
+#    {"config" => experiment["config"],
+#     "data" => {"critical_mass_days_all" => experiment["data"]["critical_mass_days_all"]}}]
+
+  experiment_data = read_experiment(experiment)
+  stat_data = get_confidence_intervals(experiment_data)
       
-      ForumTools::File.save_stat("z_" + new_file_name + "_initial." + config["initial_actors"].to_s + "_" + new_note,
-          stat_data)
+  config = experiment[0]["config"]
+  if !new_note
+    new_note = config["note"].gsub(/[^\w]/,"-")
+  end
+  key_pre = "m" + config["mode"].to_s
+  if config["initial_actors"] > 0
+    key_pre += "i" + config["initial_actors"].to_s
+  else
+    key_pre += "a" + config["daily_arrivals"].to_s
+  end
+
+  cyclic_size = stat_data["posts"].size
+  stat_data.keys.each do |key|
+    if key =~ /critical_mass/
+      collected_critical_mass_data[key_pre + key] = stat_data.delete(key)
+    elsif stat_data[key].size != cyclic_size
+      collected_daily_stat_data[key_pre + key] = stat_data.delete(key)
+    else
+      collected_stat_data[key_pre + key] = stat_data.delete(key)
     end
   end
 end
@@ -36,27 +84,43 @@ end
 def read_experiment(experiment)
   experiment_data = {}
   experiment.each do |rerun|
-    rerun[:data].keys.each do |key|
-      set = rerun[:data][key]
+    rerun["data"].keys.each do |key|
+      set = rerun["data"][key]
       v = 0
-      set.each do |variable|
-        if set.size > 1
-          new_key = key.to_s + v.to_s
-        else
-          new_key = key
-        end
-        if !experiment_data[new_key]
-          experiment_data[new_key] = []
-        end
-        c = 0
-        variable.each do |cell|
-          if !experiment_data[new_key][c]
-            experiment_data[new_key][c] = []
+      if key == "critical_mass_days_all"
+        experiment_data["critical_mass_days_all"] = [[]]
+        set.each do |cell|
+          if cell > 0
+            experiment_data["critical_mass_days_all"][0] << cell
           end
-          experiment_data[new_key][c] << cell[1]
-          c += 1
         end
-        v += 1
+      elsif set.kind_of?(Array)
+        set.each do |variable|
+          if set.size > 1
+            new_key = key.to_s + v.to_s
+          else
+            new_key = key
+          end
+          if !experiment_data[new_key]
+            experiment_data[new_key] = []
+          end
+          c = 0
+          variable.each do |cell|
+            if !experiment_data[new_key][c]
+              experiment_data[new_key][c] = []
+            end
+            experiment_data[new_key][c] << cell[1]
+            c += 1
+          end
+          v += 1
+        end
+      elsif key == "critical_mass_days"
+        if !experiment_data["critical_mass_days"]
+          experiment_data["critical_mass_days"] = [[]]
+        end
+        if set >= 0
+          experiment_data["critical_mass_days"][0] << set
+        end
       end
     end
   end
@@ -75,9 +139,9 @@ def get_confidence_intervals(experiment_data)
         stat_data[upper_key] = []
       end
       interval = confidence_interval(sample)
-      stat_data[lower_key] << interval[:lower]
-      stat_data[key] << interval[:mean]
-      stat_data[upper_key] << interval[:upper]
+      stat_data[lower_key] << round_2(interval[:lower])
+      stat_data[key] << round_2(interval[:mean])
+      stat_data[upper_key] << round_2(interval[:upper])
     end
   end
   return stat_data
@@ -88,19 +152,32 @@ def variance_and_stats(sample)
   mean = 0.0
   s = 0.0
   sample.each { |x|
-    puts sample.inspect if x == nil
-    n += 1
-    delta = x - mean
-    mean = mean + (delta / n)
-    s = s + delta * (x - mean)
+    if x != nil
+      n += 1
+      delta = x - mean
+      mean = mean + (delta / n)
+      s = s + delta * (x - mean)
+    end
   }
-  return {:variance => s / (n - 1), :mean => mean, :n => n}
+  if n != 1
+    return {:variance => s / (n - 1), :mean => mean, :n => n}
+  else
+    return {:variance => 0, :mean => mean, :n => n}
+  end
 end
 
 def stats(sample)
   stats = variance_and_stats(sample)
-  stats[:standard_deviation] = Math.sqrt(stats[:variance])
-  stats[:means_standard_deviation] = stats[:standard_deviation] / Math.sqrt(stats[:n])
+  if stats[:variance] >= 0
+    stats[:standard_deviation] = Math.sqrt(stats[:variance])
+  else
+    stats[:standard_deviation] = Math.sqrt(stats[:variance] * -1) * -1
+  end
+  if stats[:n] > 0
+    stats[:means_standard_deviation] = stats[:standard_deviation] / Math.sqrt(stats[:n])
+  else
+    stats[:means_standard_deviation] = 0
+  end
   return stats
 end
 
@@ -114,35 +191,8 @@ def confidence_interval(sample)
     }
 end
 
-def symbolize_keys(hash_or_array)
-  if hash_or_array.kind_of?(Hash)
-    return symbolize_keys_hash(hash_or_array)
-  elsif hash_or_array.kind_of?(Array)
-    return symbolize_keys_array(hash_or_array)
-  else
-    return hash_or_array
-  end
-end
-
-def symbolize_keys_array(array)
-  return array.inject([]) { |new_array, value|
-    if !value.kind_of?(String)
-      value = symbolize_keys(value)
-    end
-    new_array << value
-    new_array
-  }
-end
-
-def symbolize_keys_hash(hash)
-  return hash.inject({}) { |new_hash, key_value|
-    key, value = key_value
-    if !value.kind_of?(String)
-      value = symbolize_keys(value)
-    end
-    new_hash[key.to_sym] = value
-    new_hash
-  }
+def round_2(number)
+  return (number * 100.0).round / 100.0
 end
 
 confident_all(file_names)

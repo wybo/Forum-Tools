@@ -96,9 +96,18 @@ class ForumTools
       end 
       if options[:add_case_numbers]
         if array[0].kind_of?(Array)
-          array = [["case"].concat((array[0].size - 1).times.to_a)].concat(array)
+          array_size = array[0].size
         else
-          array = [["case"].concat((array.size - 1).times.to_a), array]
+          array_size = array.size
+        end
+        cases = (array_size - 1).times.to_a
+        if options[:case_offset]
+          cases.collect! {|c| c + options[:case_offset]}
+        end
+        if array[0].kind_of?(Array)
+          array = [["case"].concat(cases)].concat(array)
+        else
+          array = [["case"].concat(cases), array]
         end
       end
       if array[0].kind_of?(Array)
